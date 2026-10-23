@@ -1,0 +1,132 @@
+---
+title: CI/CD integration
+description: Use pydoctor-cli as a quality gate in GitHub Actions or other CI pipelines to catch vulnerabilities, dependency conflicts, exposed secrets, and unpinned actions before merging.
+---
+
+pydoctor-cli returns exit code 1 when it finds any issue with ERROR or CRITICAL severity, so a failing scan fails your pipeline step.
+
+## Prerequisites
+
+- Python 3.10 or later
+- pydoctor-cli installed in the pipeline environment (`pip install pydoctor-cli`)
+- A Python project with a `requirements.txt` or `pyproject.toml`
+
+## Choose the right command for CI
+
+`check` runs all six registered scanners: environment, dependencies, outdated packages, security, unused packages, and CI. This is the broadest quality gate. It catches vulnerabilities, dependency conflicts, outdated packages, environment issues, unused dependencies, and CI hygiene problems (exposed secrets, unpinned actions, cleartext workflow variables) in a single pass.
+
+`check --ci` restricts the scan to only the CI scanner. It skips vulnerability, dependency, outdated-package, environment, and unused-package checks. Use it when you want a fast, focused gate that checks only for:
+
+- Hardcoded secrets (AWS keys, GitHub tokens, PyPI tokens, generic credential patterns) in non-test `.py` files
+- Unpinned GitHub Actions (`@main` or `@master` instead of a commit hash or version tag)
+- Cleartext `SECRET_` environment variables in `.github/workflows/` and `.gitlab-ci.yml` files
+
+Because `check` already includes the CI scanner, you do not need a separate `check --ci` step when you run the full scan.
+
+Add `--json` to any command for machine-readable output.
+
+## Run a comprehensive scan in GitHub Actions
+
+```yaml
+# .github/workflows/pydoctor.yml
+name: pydoctor scan
+
+on: [push, pull_request]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pydoctor-cli
+          pip install -r requirements.txt
+
+      - name: Run full scan
+        run: pydoctor check --json
+```
+
+The step fails the workflow when pydoctor-cli exits with code 1. JSON output lets you pipe results into other tools or upload them as an artifact. This single command covers all six scanners, including CI hygiene checks.
+
+## Use the `github` command
+
+The `github` command runs only the CI scanner (the same scope as `check --ci`) and adds git-repo detection. It checks whether the working directory is a git repository, then scans for secrets, unpinned actions, and cleartext environment variables. If you want the full scanner set instead, use `check`.
+
+```bash
+pydoctor github --json
+```
+
+It uses the same exit code logic, so it works as a pipeline gate.
+
+## Set a minimum health score
+
+pydoctor-cli calculates a health score from 0 to 100 after each scan. By default the score is displayed but does not affect the exit code. To fail the pipeline when the score drops below a threshold, add `min_health_score` to your `pyproject.toml`:
+
+```toml
+[tool.pydoctor]
+min_health_score = 70
+```
+
+With this setting, pydoctor-cli returns exit code 1 if the health score is below 70, even when no individual issue reaches ERROR or CRITICAL severity.
+
+Score penalties are weighted by category and severity. Security issues carry the highest penalties (up to 25 points for a critical vulnerability), followed by environment and CI issues. Outdated and unused packages carry smaller deductions. The score is clamped to 0 at the lower bound.
+
+## Exit code summary
+
+pydoctor-cli returns exit code 1 when either condition is true:
+
+- Any issue has ERROR or CRITICAL severity.
+- `min_health_score` is set to a value greater than 0 in `[tool.pydoctor]` and the calculated health score falls below that threshold.
+
+Otherwise the exit code is 0.
+
+## Parse JSON output
+
+When you pass `--json`, pydoctor-cli writes a JSON object to stdout. For security-only scans (`scan-security`), the output uses a simplified shape with a `vulnerabilities` array. For all other commands, including `check --ci`, the output contains the full scan report with fields like `issues`, `scan_path`, `scanned_at`, and `scan_duration_ms`.
+
+To save the report as a CI artifact:
+
+```yaml
+      - name: Run pydoctor check
+        run: pydoctor check --json > pydoctor-report.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pydoctor-report
+          path: pydoctor-report.json
+```
+
+## Reduce scan scope
+
+If you only need a specific check in CI, use a targeted command instead of the full scan:
+
+| Command | What it checks |
+|---|---|
+| `check --ci` | Exposed secrets, unpinned actions, cleartext workflow variables |
+| `scan-security` | Known vulnerabilities via the OSV API |
+| `scan-deps` | Dependency version conflicts |
+| `scan-unused` | Unused packages (AST-based import analysis) |
+| `check-env` | Python version and virtual environment health |
+
+Each targeted command applies the same exit code logic, so it works as a pipeline gate on its own.
+
+## Use in other CI systems
+
+pydoctor-cli is a standard CLI tool. In any CI system that runs shell commands, install it with pip, run the desired command, and let the exit code control the pipeline. For example, in GitLab CI:
+
+```yaml
+pydoctor-scan:
+  image: python:3.12
+  script:
+    - pip install pydoctor-cli
+    - pip install -r requirements.txt
+    - pydoctor check
+```

@@ -1,47 +1,73 @@
 ---
 title: Quickstart
-description: Guide a new reader through one useful workflow and show them how to verify it.
+description: Install pydoctor-cli, run your first diagnostic scan, and read the results.
 ---
 
-A strong quickstart produces one meaningful result. Replace the placeholders
-below with the shortest supported path for your product.
+Run a full diagnostic scan on a Python project and understand the output.
 
 ## Before you begin
 
-List only the requirements needed for this workflow:
-
-- An account or credential, when required
-- A supported runtime, device, browser, or operating system
-- Permission to create or change the resource used in the example
+- Python 3.10 or later
+- A Python project with a virtual environment (recommended) and installed dependencies
 
 <Steps>
-  <Step title="Install the required tool">
-    Give readers one recommended installation command.
+  <Step title="Install pydoctor-cli">
+    ```bash
+    pip install pydoctor-cli
+    ```
+
+    Verify the installation:
 
     ```bash
-    npm install your-package
+    pydoctor --version
     ```
   </Step>
-  <Step title="Add the minimum configuration">
-    Include only the values needed for the first successful run.
+  <Step title="Run a diagnostic scan">
+    Navigate to your project directory and run:
 
     ```bash
-    your-cli init
+    pydoctor diagnose
     ```
-  </Step>
-  <Step title="Complete the first task">
-    Use a realistic example that produces an observable result.
 
-    ```bash
-    your-cli start
-    ```
+    This runs every built-in scanner (environment, dependencies, outdated packages, security vulnerabilities, unused packages, and CI hygiene) and prints a report to your terminal.
+
+    If no virtual environment is detected, pydoctor prompts you to confirm before continuing with system-wide packages. You can activate a virtual environment and retry, or confirm to proceed.
   </Step>
-  <Step title="Verify the result">
-    State exactly what the reader should see and how to recover when it does not appear.
+  <Step title="Read the results">
+    The report groups issues by category and assigns each one a severity:
+
+    | Severity | Meaning |
+    |---|---|
+    | `ok` | Check passed, no action needed |
+    | `info` | Informational, such as a minor version update available |
+    | `warning` | Worth investigating but not blocking |
+    | `error` | A concrete problem, such as a dependency conflict or a medium-severity vulnerability |
+    | `critical` | Requires immediate attention, such as a high-severity vulnerability or an exposed secret |
+
+    At the bottom of the report, a health score from 0 to 100 summarizes the overall state of the project. The verdict label is Excellent (90+), Good (70+), Needs Attention (50+), or Critical (below 50).
+  </Step>
+  <Step title="Check the exit code">
+    `pydoctor diagnose` exits with code 1 when:
+
+    - any issue has `error` or `critical` severity, or
+    - the project’s `min_health_score` threshold (set in `[tool.pydoctor]` in `pyproject.toml`) is above 0 and the calculated score falls below it.
+
+    Otherwise the exit code is 0. This makes it safe to use as a gate in scripts or CI pipelines.
   </Step>
 </Steps>
 
-## Choose the next task
+## Get JSON output
 
-Link to the guide that naturally follows this result. Avoid ending the reader’s
-journey with a generic list of every feature.
+Add `--json` to any scan command (`diagnose`, `check`, `scan-security`, `scan-unused`, `scan-deps`, `check-env`, `github`) to get machine-readable output instead of the Rich terminal display:
+
+```bash
+pydoctor diagnose --json
+```
+
+In JSON mode the virtual-environment prompt is skipped and the scan runs non-interactively.
+
+## Next steps
+
+- See the full list of commands and flags in [Commands](/cli/commands).
+- Set up pydoctor as a CI gate in [CI integration](/guides/ci-integration).
+- Let pydoctor fix issues automatically with [Fixing issues](/guides/fixing-issues).
