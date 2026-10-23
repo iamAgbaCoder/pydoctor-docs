@@ -1,45 +1,66 @@
 ---
 title: Introduction
-description: Give readers a clear path from their first question to a result they can verify.
+description: pydoctor-cli scans Python projects for security vulnerabilities, dependency problems, unused packages, environment issues, and CI/CD risks, then scores overall project health.
 mode: home
 ---
 
-<Hero
-  title="Build documentation around the reader"
-  subtitle="Start with a useful first result, organize what follows, and publish every format from one reviewable source."
-  primaryLabel="Get started"
-  primaryHref="/quickstart"
-  secondaryLabel="Publish your docs"
-  secondaryHref="/guides/create-a-site"
-/>
+pydoctor-cli 2.0.0 is a command-line tool that scans Python projects for common dependency and security problems. It requires Python 3.10 or later and works with pip, Poetry, uv, and pdm.
 
-## Build the reader journey
+## What it scans
 
-Begin with the task that brings most readers to your documentation, then make
-the next useful step obvious.
+pydoctor-cli runs six scanners, each focused on a different risk area:
 
 <CardGroup cols="2">
-  <Card title="Write your quickstart" icon="party-horn" href="/quickstart">
-    Turn prerequisites, setup, one realistic task, and verification into a short path.
+  <Card title="Security" icon="shield-check" href="/scanners">
+    Queries the OSV vulnerability database for known issues in your installed packages.
   </Card>
-  <Card title="Organize your navigation" icon="grid-round" href="/customization">
-    Group related tasks and references around how people use your product.
+  <Card title="Dependencies" icon="puzzle-piece" href="/scanners">
+    Runs `pip check` to find version conflicts and missing dependencies.
   </Card>
-  <Card title="Document your API" icon="code-simple" href="/api">
-    Replace `openapi.yaml` to publish browsable endpoint docs with a live playground.
+  <Card title="Outdated packages" icon="arrow-up" href="/scanners">
+    Lists installed packages with newer releases available, flagging major version gaps as warnings.
   </Card>
-  <Card title="Learn the Thally workflow" icon="wrench" href="/guides/create-a-site">
-    Create, publish, and update sites from the Cloud dashboard, the CLI, or your AI tools.
+  <Card title="Unused packages" icon="trash" href="/scanners">
+    Compares AST-extracted imports against declared dependencies to find packages you no longer use.
+  </Card>
+  <Card title="Environment health" icon="desktop" href="/scanners">
+    Checks your Python version, virtual environment, and pip version against recommended baselines.
+  </Card>
+  <Card title="CI/CD checks" icon="lock" href="/scanners">
+    Scans Python files for leaked secrets and workflow files for unpinned actions or cleartext credentials.
   </Card>
 </CardGroup>
 
-## Publish from one source
+## Health score
 
-Thally turns the same reviewed content into HTML, search, agent discovery files,
-Markdown mirrors, and a read-only MCP surface — so people and AI tools read the
-same, current answer. Add only the locales your readers need.
+Every scan produces a health score on a 0 to 100 scale. The score starts at 100 and decreases based on the severity and category of each issue found. Four verdict bands summarize the result:
 
-<Note type="info" title="Start with the product, not the template">
-  Replace this page with the questions, terminology, and workflows your readers
-  already use. Keep `docs.json` focused on the path between those tasks.
-</Note>
+| Score | Verdict |
+|---|---|
+| 90 to 100 | Excellent |
+| 70 to 89 | Good |
+| 50 to 69 | Needs Attention |
+| 0 to 49 | Critical |
+
+You can set a minimum passing score in your `pyproject.toml` with the `min_health_score` option under `[tool.pydoctor]`. When the score falls below that threshold, the CLI exits with code 1, which makes it straightforward to use as a CI gate.
+
+## Output formats
+
+By default, results render as Rich terminal panels grouped by category, with a colored health-score bar and a next-steps guide. Pass `--json` to any scan command for machine-readable JSON output suitable for CI pipelines or further processing.
+
+## Get started
+
+<CardGroup cols="2">
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Install pydoctor-cli and run your first scan in a few minutes.
+  </Card>
+  <Card title="CLI commands" icon="terminal" href="/cli/commands">
+    Full reference for every command, flag, and option.
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Tune ignored packages, health thresholds, cache TTL, and worker counts.
+  </Card>
+  <Card title="CI integration" icon="code-branch" href="/guides/ci-integration">
+    Add pydoctor-cli to GitHub Actions or GitLab CI as a quality gate.
+  </Card>
+</CardGroup>

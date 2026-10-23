@@ -1,0 +1,76 @@
+---
+title: Configuration
+description: Configure pydoctor-cli scanning behavior, caching, timeouts, and concurrency through pyproject.toml and environment variables.
+---
+
+## Project configuration
+
+Add a `[tool.pydoctor]` table to your `pyproject.toml` to customize scanning behavior per project.
+
+```toml
+[tool.pydoctor]
+ignored_packages = ["boto3", "celery"]
+min_health_score = 70
+```
+
+### `ignored_packages`
+
+A list of package names to exclude from unused-package detection. Packages in this list are skipped during the `scan-unused` scan and the dependency-graph walk that identifies implicitly used packages.
+
+Several common development tools are always ignored regardless of this setting: black, pytest, flake8, mypy, tox, isort, ruff, build, setuptools, wheel, and others.
+
+**Type:** `list[str]`
+**Default:** empty (only the built-in ignore list applies)
+
+### `min_health_score`
+
+The minimum health score (0 to 100) required for a scan to exit successfully. When this value is greater than 0, pydoctor-cli calculates a health score after scanning and returns exit code 1 if the score falls below the threshold. This is useful for enforcing quality gates in CI.
+
+**Type:** `int`
+**Default:** `0` (health score is calculated but does not affect the exit code)
+
+## Environment variables
+
+Environment variables let you tune network and concurrency settings without changing project files. They apply to every pydoctor-cli invocation in the current shell session.
+
+```bash
+export PYDOCTOR_CACHE_TTL=7200
+export PYDOCTOR_REQUEST_TIMEOUT=30
+export PYDOCTOR_MAX_WORKERS=4
+```
+
+### `PYDOCTOR_CACHE_TTL`
+
+Time-to-live for cache entries, in seconds. Cached results older than this value are treated as expired and re-fetched on the next scan.
+
+**Default:** `3600` (1 hour)
+
+### `PYDOCTOR_REQUEST_TIMEOUT`
+
+HTTP request timeout in seconds, used for outbound calls to the OSV vulnerability API.
+
+**Default:** `10`
+
+### `PYDOCTOR_MAX_WORKERS`
+
+Maximum number of concurrent threads used when running scanners in parallel. Lowering this value reduces network and CPU pressure; raising it can speed up scans on projects with many packages.
+
+**Default:** `8`
+
+## Cache
+
+pydoctor-cli maintains a file-backed JSON cache at `~/.pydoctor/cache.json`. The cache stores results from network lookups (primarily vulnerability data from the OSV API) so that repeated scans against the same package versions avoid redundant requests.
+
+Entries expire automatically based on the `PYDOCTOR_CACHE_TTL` value. You can also manage the cache manually with the `cache` subcommands:
+
+```bash
+# Remove all cached data
+pydoctor cache clear
+
+# Remove only expired entries
+pydoctor cache purge
+```
+
+The `--no-cache` flag on the `diagnose` command clears the entire cache before scanning rather than bypassing it, so subsequent commands start with a fresh cache.
+
+If the cache file becomes corrupted or unreadable, pydoctor-cli silently resets it and continues normally.

@@ -1,0 +1,229 @@
+---
+title: CLI Command Reference
+description: Every pydoctor command, its options, defaults, scanner keys, and exit-code behavior.
+---
+
+## Global options
+
+These options apply to the top-level `pydoctor` invocation, before any command name.
+
+| Flag | Description |
+|---|---|
+| `--version` | Print the version and exit. |
+
+Running `pydoctor` with no arguments prints help.
+
+## Core commands
+
+### `diagnose`
+
+Run a full diagnosis of the project. All registered scanners execute.
+
+```bash
+pydoctor diagnose
+```
+
+| Option | Short | Default | Description |
+|---|---|---|---|
+| `--path` | `-p` | `.` | Project directory to scan. |
+| `--json` | `-j` | `false` | Output results as JSON. |
+| `--verbose` | `-v` | `false` | Show detailed output and timing. |
+| `--no-cache` | | `false` | Clear the local vulnerability cache before scanning. |
+
+When running without `--json`, pydoctor prompts for confirmation if no virtual environment is detected. The prompt is skipped in JSON mode.
+
+**Scanner keys:** all registered scanners (environment, dependencies, outdated, security, unused, ci).
+
+**Exit code:** 1 when any issue has ERROR or CRITICAL severity, or when the calculated health score falls below the `min_health_score` threshold set in `[tool.pydoctor]`. Otherwise 0.
+
+### `check`
+
+Security and health check with an optional CI/CD guard mode.
+
+```bash
+pydoctor check --ci
+```
+
+| Option | Short | Default | Description |
+|---|---|---|---|
+| `--path` | `-p` | `.` | Project directory to scan. |
+| `--ci` | | `false` | Restrict the scan to only the `ci` scanner. |
+| `--json` | `-j` | `false` | Output results as JSON. |
+| `--verbose` | `-v` | `false` | Show detailed output and timing. |
+
+**Scanner keys:** without `--ci`, all registered scanners run (including `ci`). With `--ci`, only the `ci` scanner runs.
+
+**Exit code:** same rules as `diagnose`.
+
+### `fix`
+
+Scan the project and attempt automated fixes: upgrade vulnerable or outdated packages, resolve dependency conflicts, remove unused packages, and create a virtual environment if missing. Dispatches to the appropriate package manager (pip, Poetry, uv, or PDM) based on project configuration.
+
+```bash
+pydoctor fix
+```
+
+| Option | Short | Default | Description |
+|---|---|---|---|
+| `--path` | `-p` | `.` | Project directory to scan. |
+| `--safe` / `--no-safe` | | `--safe` | When safe, confirm each action interactively. |
+| `--upgrade` / `--no-upgrade` | | `--upgrade` | Upgrade outdated packages. |
+| `--remove` / `--no-remove` | | `--no-remove` | Remove unused packages. |
+
+A positional `packages` argument optionally limits fixes to the named packages. When `packages` are specified or `--remove` is passed, unused-package removal runs.
+
+**Scanner keys:** all registered scanners (used internally to produce the report that drives fixes).
+
+**Exit code:** 0 on completion.
+
+## Security and CI/CD commands
+
+### `scan-security`
+
+Run only the OSV vulnerability scanner against installed packages.
+
+```bash
+pydoctor scan-security
+```
+
+| Option | Short | Default | Description |
+|---|---|---|---|
+| `--path` | `-p` | `.` | Project directory to scan. |
+| `--json` | `-j` | `false` | Output results as JSON. |
+| `--verbose` | `-v` | `false` | Show detailed output and timing. |
+
+**Scanner keys:** `security`.
+
+**Exit code:** 1 if any vulnerability has ERROR or CRITICAL severity, or when the health score falls below the `min_health_score` threshold. Otherwise 0.
+
+### `docker`
+
+Check for a Dockerfile and whether it uses a Python base image. This command does not run any scanners. It is a beta feature limited to file-existence checks.
+
+```bash
+pydoctor docker
+```
+
+| Option | Short | Default | Description |
+|---|---|---|---|
+| `--path` | `-p` | `.` | Project directory to check. |
+
+A positional `image` argument is accepted but currently unused beyond display.
+
+**Scanner keys:** none.
+
+**Exit code:** 0.
+
+### `github`
+
+Run a scan with CI mode enabled. Checks git repository status when not in JSON mode.
+
+```bash
+pydoctor github
+```
+
+| Option | Short | Default | Description |
+|---|---|---|---|
+| `--path` | `-p` | `.` | Project directory to scan. |
+| `--json` | `-j` | `false` | Output results as JSON. |
+| `--verbose` | `-v` | `false` | Show detailed output and timing. |
+
+A positional `repo` argument optionally specifies a GitHub repository URL.
+
+**Scanner keys:** only the `ci` scanner (CI mode is always on, which restricts the scan to the `ci` scanner).
+
+**Exit code:** same rules as `diagnose`.
+
+## Resource hygiene commands
+
+### `scan-unused`
+
+Detect unused packages using AST-based import analysis.
+
+```bash
+pydoctor scan-unused
+```
+
+| Option | Short | Default | Description |
+|---|---|---|---|
+| `--path` | `-p` | `.` | Project directory to scan. |
+| `--json` | `-j` | `false` | Output results as JSON. |
+| `--verbose` | `-v` | `false` | Show detailed output and timing. |
+
+**Scanner keys:** `unused`.
+
+**Exit code:** 1 if any issue has ERROR or CRITICAL severity, or when the health score falls below the `min_health_score` threshold. Otherwise 0.
+
+### `scan-deps`
+
+Check for dependency version conflicts.
+
+```bash
+pydoctor scan-deps
+```
+
+| Option | Short | Default | Description |
+|---|---|---|---|
+| `--path` | `-p` | `.` | Project directory to scan. |
+| `--json` | `-j` | `false` | Output results as JSON. |
+| `--verbose` | `-v` | `false` | Show detailed output and timing. |
+
+**Scanner keys:** `dependencies`.
+
+**Exit code:** 1 if any conflict has ERROR or CRITICAL severity, or when the health score falls below the `min_health_score` threshold. Otherwise 0.
+
+### `check-env`
+
+Verify Python version and virtual environment health.
+
+```bash
+pydoctor check-env
+```
+
+| Option | Short | Default | Description |
+|---|---|---|---|
+| `--path` | `-p` | `.` | Project directory to scan. |
+| `--json` | `-j` | `false` | Output results as JSON. |
+| `--verbose` | `-v` | `false` | Show detailed output and timing. |
+
+**Scanner keys:** `environment`.
+
+**Exit code:** 1 if any issue has ERROR or CRITICAL severity, or when the health score falls below the `min_health_score` threshold. Otherwise 0.
+
+## Utility commands
+
+### `version`
+
+Print the pydoctor version string.
+
+```bash
+pydoctor version
+```
+
+No options. Exit code 0.
+
+### `cache clear`
+
+Delete the entire local cache file at `~/.pydoctor/cache.json`.
+
+```bash
+pydoctor cache clear
+```
+
+No options. Exit code 0.
+
+### `cache purge`
+
+Remove only expired entries from the cache. The TTL defaults to 3600 seconds and can be changed with the `PYDOCTOR_CACHE_TTL` environment variable.
+
+```bash
+pydoctor cache purge
+```
+
+No options. Exit code 0.
+
+There is no `cache info` subcommand. Only `clear` and `purge` are implemented.
+
+## Cache bypass behavior
+
+The `--no-cache` flag on the `diagnose` command calls `CacheManager().clear()` before scanning. This deletes the entire cache file rather than skipping the cache for the current run only. Subsequent scans will rebuild the cache from scratch.

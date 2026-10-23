@@ -1,0 +1,118 @@
+---
+title: Fixing issues
+description: Use the pydoctor fix command to automatically upgrade vulnerable or outdated packages, resolve dependency conflicts, remove unused packages, and create a virtual environment.
+---
+
+The `fix` command runs a full scan and then attempts to resolve the issues it finds. It detects your package manager (pip, Poetry, uv, or PDM) and runs the appropriate install, update, or remove commands.
+
+## Prerequisites
+
+- Python 3.10 or later
+- pydoctor-cli installed (`pip install pydoctor-cli`)
+- A Python project with a `requirements.txt` or `pyproject.toml`
+- Project dependencies installed so the scan can detect them
+
+## Run a basic fix
+
+From your project root:
+
+```bash
+pydoctor fix
+```
+
+This scans the project with all scanners, then walks through fixable issues. By default it runs in safe mode, which prompts you for confirmation before each change.
+
+The command handles four categories of fixes in order:
+
+1. **Vulnerable packages** are upgraded to a patched version.
+2. **Outdated packages** are upgraded (enabled by default).
+3. **Dependency conflicts** are resolved by installing missing packages or correcting version mismatches.
+4. **Virtual environment creation** if no venv is detected, a `.venv` directory is created.
+
+Unused packages are not removed unless you explicitly opt in.
+
+## Options
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--path` / `-p` | `.` | Path to the project directory to scan and fix. |
+| `--safe` / `--no-safe` | `--safe` | When safe, each fix requires interactive confirmation. Pass `--no-safe` to apply all fixes without prompting. |
+| `--upgrade` / `--no-upgrade` | `--upgrade` | Upgrade outdated packages. Pass `--no-upgrade` to skip outdated-package upgrades. |
+| `--remove` / `--no-remove` | `--remove` is off | Remove unused packages. Must be explicitly enabled with `--remove` for unused-package removal to run. |
+| Positional `packages` | None | Restrict fixes to specific packages by name. When packages are provided, unused-package removal is also enabled for those packages. |
+
+## Remove unused packages
+
+Unused-package removal is off by default to prevent accidental uninstalls. Enable it with `--remove`:
+
+```bash
+pydoctor fix --remove
+```
+
+In safe mode you are still prompted before each removal. To skip prompts:
+
+```bash
+pydoctor fix --remove --no-safe
+```
+
+Packages listed in `ignored_packages` under `[tool.pydoctor]` in your `pyproject.toml` are excluded from unused-package detection and will not be flagged for removal.
+
+## Fix specific packages
+
+Pass package names as positional arguments to limit fixes to those packages only:
+
+```bash
+pydoctor fix requests urllib3
+```
+
+When you specify packages, the scan results are filtered to issues that match those names. If none of the named packages have fixable issues, the command exits immediately. Specifying packages also enables unused-package removal for those packages, even without `--remove`.
+
+## Skip outdated-package upgrades
+
+If you only want to fix vulnerabilities and dependency conflicts without upgrading outdated packages:
+
+```bash
+pydoctor fix --no-upgrade
+```
+
+## Non-interactive mode
+
+For scripted or CI use, disable confirmation prompts:
+
+```bash
+pydoctor fix --no-safe
+```
+
+This applies every available fix without asking. Combine with other flags to control scope:
+
+```bash
+pydoctor fix --no-safe --no-upgrade --remove
+```
+
+This resolves vulnerabilities and conflicts, removes unused packages, and skips outdated-package upgrades, all without prompts.
+
+## Package manager dispatch
+
+The `fix` command detects your package manager from `pyproject.toml` metadata and lock files, then runs the corresponding commands:
+
+| Manager | Detection | Install/upgrade | Remove |
+|---|---|---|---|
+| Poetry | `[tool.poetry]` in `pyproject.toml` | `poetry add` / `poetry update` | `poetry remove` |
+| uv | `[tool.uv]` in `pyproject.toml` or `uv.lock` in project root | `uv add` / `uv add --upgrade` | `uv remove` |
+| PDM | `[tool.pdm]` in `pyproject.toml` | `pdm add` / `pdm update` | `pdm remove` |
+| pip | Fallback when no other manager is detected | `pip install` / `pip install --upgrade` | `pip uninstall -y` |
+
+## Virtual environment creation
+
+If the scan finds no virtual environment (`ENV_NO_VENV` issue), the `fix` command offers to create one at `.venv` in the project directory. In safe mode you are prompted first. This step runs after all package fixes.
+
+## Configure ignored packages
+
+To prevent the unused-package scanner from flagging packages that are used dynamically or as development tools, add them to `ignored_packages` in your `pyproject.toml`:
+
+```toml
+[tool.pydoctor]
+ignored_packages = ["celery", "gunicorn"]
+```
+
+These packages are excluded from the unused-package scan and will not appear as candidates for removal.

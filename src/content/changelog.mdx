@@ -1,15 +1,16 @@
 ---
 title: Changelog
-description: Record product changes that alter how readers use the documented experience.
+description: Release history for pydoctor-cli.
 ---
 
-## v0.1.0
+## 2.0.0
 
-The first published version of this documentation.
+Initial documented release of pydoctor-cli. This entry records the baseline feature set; no prior version source is available for comparison.
 
-- A task-focused introduction and quickstart
-- Browsable API documentation generated from `openapi.yaml`
-- Agent-readable discovery files and a read-only MCP endpoint
-
-Replace this entry with changes your readers need to understand. Lead with the
-impact, then link to the guide or reference that explains the new behavior.
+- CLI built on Typer with commands `diagnose`, `check`, `fix`, `scan-security`, `scan-unused`, `scan-deps`, `check-env`, `docker`, `github`, and `version`
+- Six concurrent scanners: environment, dependencies, outdated packages, security (OSV), unused packages, and CI/CD
+- Automated fix workflow with support for pip, Poetry, uv, and pdm
+- Rich terminal output and JSON output (`--json`)
+- File-backed response cache at `~/.pydoctor/cache.json` with configurable TTL
+- Project configuration via `[tool.pydoctor]` in `pyproject.toml`
+- Requires Python 3.10 or later

@@ -1,0 +1,189 @@
+---
+title: Scanners
+description: Detection logic, issue codes, severity mapping, and limitations for every pydoctor-cli scanner.
+---
+
+pydoctor-cli ships six scanners. Each scanner receives a `ProjectContext` and returns a list of `Issue` objects. Scanners run concurrently in a `ThreadPoolExecutor` (up to `PYDOCTOR_MAX_WORKERS` threads, default 8). If one scanner crashes, the others continue and a `SCANNER_ERROR` issue is added to the report.
+
+## Environment
+
+Registry key: `environment`
+
+Checks Python version, virtual-environment state, pip version, and platform details.
+
+### Detection logic
+
+| Check | How it works |
+|---|---|
+| Python version | Compares the running Python `(major, minor)` against a minimum threshold of `(3, 8)` and a recommended threshold of `(3, 11)`. Below minimum is an error; below recommended is a warning. |
+| Virtual environment | Reports whether the project is running inside a virtual environment. |
+| pip version | Calls pip to obtain its version string. If the major version is below 21, a warning is raised. If pip is not found at all, an error is raised. |
+| Platform info | Emits an informational issue with the OS name, architecture, and Python executable path. |
+
+### Issue codes
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `ENV_PYTHON_TOO_OLD` | error | Python version is below the minimum supported `(3, 8)`. |
+| `ENV_PYTHON_OUTDATED` | warning | Python version is below the recommended `(3, 11)`. |
+| `ENV_PYTHON_OK` | ok | Python version meets or exceeds the recommended threshold. |
+| `ENV_VENV_OK` | ok | Running inside a virtual environment. |
+| `ENV_NO_VENV` | warning | No virtual environment detected. |
+| `ENV_PIP_MISSING` | error | pip could not be found or invoked. |
+| `ENV_PIP_OUTDATED` | warning | pip major version is below 21. |
+| `ENV_PIP_OK` | ok | pip version meets requirements. |
+| `ENV_PLATFORM_INFO` | info | Informational platform details. |
+
+## Dependencies
+
+Registry key: `dependencies`
+
+Detects version conflicts and missing packages by parsing the output of `pip check`.
+
+### Detection logic
+
+Runs `pip check` as a subprocess and applies regex patterns to each output line:
+
+- A "requires X, but Y is installed" line produces a version-conflict issue.
+- A "requires X, which is not installed" line produces a missing-dependency issue.
+- Unrecognised lines are reported as generic conflicts.
+
+When `pip check` reports no broken requirements, a single ok issue is returned.
+
+### Issue codes
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `DEP_VERSION_CONFLICT` | error | An installed package version violates another package's declared requirement. |
+| `DEP_MISSING` | error | A required package is not installed. |
+| `DEP_CONFLICT` | error | A dependency conflict that did not match the specific regex patterns above. |
+| `DEP_NO_CONFLICTS` | ok | All installed packages satisfy each other's requirements. |
+
+## Outdated packages
+
+Registry key: `outdated`
+
+Identifies installed packages that have newer versions available on PyPI.
+
+### Detection logic
+
+Runs `pip list --outdated --format=json` as a subprocess. For each outdated package, the scanner compares the installed and latest version numbers using the `packaging` library:
+
+- A major-version bump (for example 1.x to 2.x) is reported as a warning because it may include breaking changes.
+- A minor or patch bump is reported as info.
+- If either version string cannot be parsed, the issue defaults to warning.
+
+A `subprocess.TimeoutExpired` exception produces an informational timeout issue instead of failing the scan.
+
+### Issue codes
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `PKG_OUTDATED` | warning or info | A package has a newer version available. Warning for major bumps, info for minor or patch bumps. |
+| `PKG_ALL_UP_TO_DATE` | ok | No outdated packages were detected. |
+| `PKG_OUTDATED_TIMEOUT` | info | The outdated-packages check timed out due to a slow network or index server. |
+
+## Security
+
+Registry key: `security`
+
+Queries the OSV (Open Source Vulnerabilities) batch API for known CVEs, GHSA advisories, and other security findings across all installed packages.
+
+### Detection logic
+
+1. Collects every installed package and its version from the project context.
+2. Builds query batches of up to 100 packages and sends them to the OSV `/v1/querybatch` endpoint.
+3. Makes up to 3 attempts per batch request with exponential backoff (1 s, 2 s between attempts).
+4. When the batch response is missing summary and details for a vulnerability, the scanner deep-fetches the full advisory from `/v1/vulns/{id}`.
+5. Results are cached per package and version (MD5 key) in the local cache file (`~/.pydoctor/cache.json`). Cached entries are reused on subsequent scans within the TTL window (default 3600 s, configurable with `PYDOCTOR_CACHE_TTL`).
+
+### Severity mapping
+
+OSV / CVSS severity strings are mapped to pydoctor-cli severities:
+
+| OSV severity | pydoctor-cli severity |
+|---|---|
+| CRITICAL | critical |
+| HIGH | critical |
+| MEDIUM | error |
+| LOW | warning |
+| UNKNOWN | warning |
+
+### Issue codes
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `SEC_VULNERABILITY` | varies (see mapping above) | A known vulnerability was found for an installed package. |
+| `SEC_NO_VULNS` | ok | No vulnerabilities were found across all scanned packages. |
+| `SEC_NO_PACKAGES` | info | No installed packages were available to scan. |
+| `SEC_PLATFORM_INFO` | info | Informational context about the scan environment. |
+
+## Unused packages
+
+Registry key: `unused`
+
+Detects declared dependencies that are never imported in the project's Python source files.
+
+### Detection logic
+
+1. Parses every `.py` file in the project using the AST to collect top-level import names.
+2. Normalises import names to PyPI package names using a built-in mapping table (for example, `cv2` maps to `opencv-python`, `PIL` maps to `pillow`) and a fallback that lowercases and converts underscores to dashes.
+3. Compares the normalised set against the project's declared dependencies (from `requirements.txt` or `pyproject.toml`).
+4. Walks the dependency graph (obtained via pipdeptree) to identify packages that are only used indirectly as transitive dependencies of another package.
+5. Packages in the hardcoded ignore list or the `ignored_packages` list from `[tool.pydoctor]` configuration are excluded from detection.
+
+### Hardcoded ignore list
+
+The following packages are always excluded from unused-package detection: black, pytest, flake8, mypy, tox, isort, pydoctor, rich, pydoctor-cli, setuptools, wheel, ruff, build.
+
+Additional packages can be excluded by adding them to the `ignored_packages` list in `[tool.pydoctor]` in your `pyproject.toml`.
+
+### Limitations
+
+- Dynamic imports (`importlib.import_module`, `__import__`) are not tracked. Packages loaded only through dynamic imports may be falsely reported as unused.
+- Only declared dependencies are checked. Transitive-only installs that are not declared are not flagged.
+
+### Issue codes
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `UNUSED_PACKAGE` | warning | A declared dependency has no corresponding imports and is not required by any used package. |
+| `UNUSED_TRANSITIVE` | info | A declared dependency is only used indirectly as a transitive dependency of another package. |
+| `UNUSED_NONE_FOUND` | ok | All declared dependencies appear to be utilized. |
+| `UNUSED_NO_DEPS_FILE` | info | No requirements file was found, so unused detection was skipped. |
+| `UNUSED_NO_PY_FILES` | info | No `.py` files were found to scan. |
+
+## CI/CD
+
+Registry key: `ci`
+
+Scans for hardcoded secrets in source files and checks CI workflow configurations for insecure patterns.
+
+### Detection logic
+
+**Secret scanning** searches non-test `.py` files for regex matches against these patterns:
+
+| Pattern name | What it matches |
+|---|---|
+| `AWS_KEY` | Strings starting with `AWS` or `AKIA` followed by 16 uppercase alphanumeric characters. |
+| `GH_TOKEN` | Strings starting with `ghp_` followed by 36 alphanumeric characters. |
+| `PYPI_TOKEN` | Strings starting with `pypi-` followed by 50 or more alphanumeric, dash, or underscore characters. |
+| `GENERIC_SECRET` | Assignments like `secret = "..."`, `password = "..."`, `passwd = "..."`, `api_key: "..."`, or `apikey: "..."` where the value is 8 or more characters. |
+
+Test files are excluded from secret scanning.
+
+**Workflow scanning** examines files in `.github/workflows/` (`.yml` and `.yaml`) and `.gitlab-ci.yml`:
+
+| Check | Condition | Severity |
+|---|---|---|
+| Unpinned actions | Workflow file contains `@main` or `@master` | warning |
+| Cleartext secrets | Workflow file contains an `env:` block with a key matching `SECRET_` | warning |
+
+### Issue codes
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `SECRET_EXPOSED_{pattern}` | critical | A potential secret matching the named pattern was found in a source file. The `{pattern}` suffix is the pattern name (for example `SECRET_EXPOSED_AWS_KEY`). |
+| `CI_UNPINNED_ACTION` | warning | A workflow uses an unpinned action reference (`@main` or `@master`). |
+| `CI_CLEARTEXT_ENV` | warning | A workflow defines environment variables that may contain cleartext secrets. |
+| `CI_HEALTHY` | ok | No exposed secrets or insecure workflow patterns were detected. |
