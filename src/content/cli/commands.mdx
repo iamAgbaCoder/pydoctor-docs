@@ -70,7 +70,9 @@ pydoctor fix
 | `--upgrade` / `--no-upgrade` | | `--upgrade` | Upgrade outdated packages. |
 | `--remove` / `--no-remove` | | `--no-remove` | Remove unused packages. |
 
-A positional `packages` argument optionally limits fixes to the named packages. When `packages` are specified or `--remove` is passed, unused-package removal runs.
+A positional `packages` argument optionally limits fixes to the named packages. Unused-package removal runs only when `--remove` is passed.
+
+Each upgrade is verified against the installed version afterwards. An upgrade that leaves the version unchanged is reported as a warning, not a fix. See [Fixing issues](/guides/fixing-issues#how-upgrades-are-applied-and-verified).
 
 **Scanner keys:** all registered scanners (used internally to produce the report that drives fixes).
 

@@ -24,12 +24,34 @@ This scans the project with all scanners, then walks through fixable issues. By 
 
 The command handles four categories of fixes in order:
 
-1. **Vulnerable packages** are upgraded to a patched version.
-2. **Outdated packages** are upgraded (enabled by default).
+1. **Vulnerable packages** are upgraded to the lowest version that fixes every known advisory for that package. You're asked once per package, not once per advisory.
+2. **Outdated packages** are upgraded to the latest version (enabled by default). Packages already upgraded in step 1 are skipped.
 3. **Dependency conflicts** are resolved by installing missing packages or correcting version mismatches.
 4. **Virtual environment creation** if no venv is detected, a `.venv` directory is created.
 
-Unused packages are not removed unless you explicitly opt in.
+Unused packages are not removed unless you pass `--remove`.
+
+In safe mode, each prompt shows the target version and, for vulnerable packages, how many advisories the upgrade resolves:
+
+```text
+ Upgrade pillow to 13.0.0? (54 advisories, 31 critical) [y/n]:
+```
+
+## How upgrades are applied and verified
+
+When a target version is known, `fix` passes it as a minimum version, for example `uv add "pillow>=13.0.0"`. uv, Poetry, and PDM rewrite the matching constraint in `pyproject.toml`, so an exact pin such as `pillow==12.2.0` no longer blocks the upgrade. Review the change to `pyproject.toml` before you commit it.
+
+After each upgrade, `fix` checks the installed version again:
+
+- If it changed, you see `✔ pillow upgraded (12.2.0 → 13.0.0).`
+- If it didn't change, you see a warning instead of a success message, along with the constraint that blocked it:
+
+  ```text
+   ⚠ pillow is still 12.2.0. The command succeeded but nothing changed.
+     Your project declares "pillow==12.2.0", which blocks the upgrade. Loosen it, then run `pydoctor fix pillow` again.
+  ```
+
+Only verified upgrades count toward the "fixes applied" total.
 
 ## Options
 
@@ -39,7 +61,7 @@ Unused packages are not removed unless you explicitly opt in.
 | `--safe` / `--no-safe` | `--safe` | When safe, each fix requires interactive confirmation. Pass `--no-safe` to apply all fixes without prompting. |
 | `--upgrade` / `--no-upgrade` | `--upgrade` | Upgrade outdated packages. Pass `--no-upgrade` to skip outdated-package upgrades. |
 | `--remove` / `--no-remove` | `--remove` is off | Remove unused packages. Must be explicitly enabled with `--remove` for unused-package removal to run. |
-| Positional `packages` | None | Restrict fixes to specific packages by name. When packages are provided, unused-package removal is also enabled for those packages. |
+| Positional `packages` | None | Restrict fixes to specific packages by name. Doesn't enable removal; combine with `--remove` to remove a named package that's reported as unused. |
 
 ## Remove unused packages
 
@@ -65,7 +87,13 @@ Pass package names as positional arguments to limit fixes to those packages only
 pydoctor fix requests urllib3
 ```
 
-When you specify packages, the scan results are filtered to issues that match those names. If none of the named packages have fixable issues, the command exits immediately. Specifying packages also enables unused-package removal for those packages, even without `--remove`.
+When you specify packages, the scan results are filtered to issues that match those names. If none of the named packages have fixable issues, the command exits immediately.
+
+Naming a package never removes it. If a named package is reported as possibly unused, `fix` tells you and leaves it installed. To remove it, run `pydoctor fix <package> --remove`.
+
+<Warning title="Before 2.1.0">
+  In 2.0.x, naming a package also enabled removal, so `pydoctor fix redis` could offer to uninstall redis. Upgrade with `pip install --upgrade pydoctor-cli`.
+</Warning>
 
 ## Skip outdated-package upgrades
 
@@ -97,10 +125,12 @@ The `fix` command detects your package manager from `pyproject.toml` metadata an
 
 | Manager | Detection | Install/upgrade | Remove |
 |---|---|---|---|
-| Poetry | `[tool.poetry]` in `pyproject.toml` | `poetry add` / `poetry update` | `poetry remove` |
-| uv | `[tool.uv]` in `pyproject.toml` or `uv.lock` in project root | `uv add` / `uv add --upgrade` | `uv remove` |
-| PDM | `[tool.pdm]` in `pyproject.toml` | `pdm add` / `pdm update` | `pdm remove` |
-| pip | Fallback when no other manager is detected | `pip install` / `pip install --upgrade` | `pip uninstall -y` |
+| Poetry | `[tool.poetry]` in `pyproject.toml` | `poetry add "pkg>=X"` | `poetry remove` |
+| uv | `[tool.uv]` in `pyproject.toml` or `uv.lock` in project root | `uv add "pkg>=X"` | `uv remove` |
+| PDM | `[tool.pdm]` in `pyproject.toml` | `pdm add "pkg>=X"` | `pdm remove` |
+| pip | Fallback when no other manager is detected | `pip install --upgrade "pkg>=X"` | `pip uninstall -y` |
+
+`X` is the target version. If no target version is known, uv runs `uv add --upgrade-package pkg pkg`, Poetry and PDM run `update`, and pip runs `pip install --upgrade pkg`. With pip, `requirements.txt` isn't rewritten for you.
 
 ## Virtual environment creation
 
@@ -108,11 +138,11 @@ If the scan finds no virtual environment (`ENV_NO_VENV` issue), the `fix` comman
 
 ## Configure ignored packages
 
-To prevent the unused-package scanner from flagging packages that are used dynamically or as development tools, add them to `ignored_packages` in your `pyproject.toml`:
+The unused-package scanner recognises imports, module paths in strings (such as Django settings), and commands in run files (such as a `Procfile`). To keep it from flagging packages it still can't see, such as plugins loaded at runtime, add them to `ignored_packages` in your `pyproject.toml`:
 
 ```toml
 [tool.pydoctor]
-ignored_packages = ["celery", "gunicorn"]
+ignored_packages = ["celery", "my-plugin-package"]
 ```
 
 These packages are excluded from the unused-package scan and will not appear as candidates for removal.

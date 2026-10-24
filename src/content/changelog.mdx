@@ -3,6 +3,13 @@ title: Changelog
 description: Release history for pydoctor-cli.
 ---
 
+## 2.1.0
+
+- **`fix` reports what really happened.** Upgrades are verified against the installed version. When a pin in `pyproject.toml` blocks an upgrade, `fix` shows a warning and the blocking constraint instead of reporting success. Previously, `uv add --upgrade pkg` could exit successfully without changing anything while `fix` printed "fixed".
+- **One prompt per package.** Vulnerable packages are offered once, with the number of advisories, and upgraded to the lowest version that fixes all of them. Uses `pkg>=X` so uv, Poetry, and PDM rewrite blocking pins.
+- **No accidental removals.** `pydoctor fix <package>` no longer enables unused-package removal. Removal requires `--remove`.
+- **Fewer false "unused" reports.** Packages imported under a different name, loaded from strings such as Django settings, or started from a Procfile, Dockerfile, or similar file are now recognised. Findings are labelled "Possibly unused dependency".
+
 ## 2.0.1
 
 - **Security scans fail closed.** When the OSV database cannot be reached, `scan-security`, `diagnose`, and `check` now report `SEC_SCAN_INCOMPLETE` (error, exit code 1) and name the unchecked packages. Previously a network failure produced "No known vulnerabilities" and a perfect score.

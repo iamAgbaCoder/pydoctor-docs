@@ -11,7 +11,7 @@ Before you start, check your version:
 pydoctor --version
 ```
 
-Several fixes below need **2.0.1 or later**. Upgrade with `pip install --upgrade pydoctor-cli`.
+Several fixes below need **2.0.1 or later**, and two need **2.1.0 or later**. Upgrade with `pip install --upgrade pydoctor-cli`.
 
 <AccordionGroup>
   <Accordion id="wrong-pydoctor" title="The pydoctor command runs a different tool">
@@ -96,6 +96,35 @@ Several fixes below need **2.0.1 or later**. Upgrade with `pip install --upgrade
     ```bash
     pip install --upgrade pydoctor-cli
     ```
+  </Accordion>
+
+  <Accordion id="fix-did-nothing" title="fix says a package was fixed, but the scan still reports it">
+    **Symptom:** `pydoctor fix` printed `✔ pillow fixed.`, but the next `pydoctor diagnose` reports the same vulnerabilities. With uv, the output shows `Checked N packages` and no `+ pillow==…` line.
+
+    **Cause:** in 2.0.x, `fix` ran `uv add --upgrade pillow`, which keeps whatever constraint `pyproject.toml` already has. With an exact pin such as `pillow==12.2.0`, uv changes nothing and still exits successfully, and `fix` treated that as success.
+
+    **Fix:** upgrade to 2.1.0 or later and run `fix` again. It now targets a version (`uv add "pillow>=13.0.0"`), which rewrites the pin, and checks the installed version afterwards. On any version, you can also loosen the pin yourself:
+
+    ```bash
+    uv add "pillow>=13.0.0"
+    ```
+
+    See [How upgrades are applied and verified](/guides/fixing-issues#how-upgrades-are-applied-and-verified).
+  </Accordion>
+
+  <Accordion id="false-unused" title="A package you use is reported as unused">
+    **Symptom:** `scan-unused` lists packages your app depends on, such as `whitenoise`, `django-cors-headers`, `gunicorn`, or `python-decouple`.
+
+    **Cause:** before 2.1.0, the scanner only matched `import` statements against a small name table. It missed packages imported under a different name (`decouple`), loaded from strings in Django settings (`INSTALLED_APPS`, `MIDDLEWARE`, `CACHES`), or started as commands (`gunicorn` in a `Procfile`).
+
+    **Fix:** upgrade to 2.1.0 or later, which detects all three. For a package it still can't see, such as a plugin loaded at runtime, add it to `ignored_packages`:
+
+    ```toml
+    [tool.pydoctor]
+    ignored_packages = ["my-plugin-package"]
+    ```
+
+    Don't remove packages based on this report alone. Findings are labelled "Possibly unused" for that reason.
   </Accordion>
 
   <Accordion id="stale-results" title="A vulnerability you already fixed is still reported">

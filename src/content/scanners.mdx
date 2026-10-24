@@ -125,15 +125,17 @@ OSV / CVSS severity strings are mapped to pydoctor-cli severities:
 
 Registry key: `unused`
 
-Detects declared dependencies that are never imported in the project's Python source files.
+Detects declared dependencies that nothing in the project appears to use. Because some packages are loaded in ways static analysis can't see, findings are reported as *possibly* unused.
 
 ### Detection logic
 
 1. Parses every `.py` file in the project using the AST to collect top-level import names.
-2. Normalises import names to PyPI package names using a built-in mapping table (for example, `cv2` maps to `opencv-python`, `PIL` maps to `pillow`) and a fallback that lowercases and converts underscores to dashes.
-3. Compares the normalised set against the project's declared dependencies (from `requirements.txt` or `pyproject.toml`).
-4. Walks the dependency graph (obtained via pipdeptree) to identify packages that are only used indirectly as transitive dependencies of another package.
-5. Packages in the hardcoded ignore list or the `ignored_packages` list from `[tool.pydoctor]` configuration are excluded from detection.
+2. Maps import names to PyPI package names using the project environment's own package metadata (`importlib.metadata.packages_distributions()`), so a package whose import name differs from its PyPI name is matched correctly: `decouple` maps to `python-decouple`, `corsheaders` to `django-cors-headers`, `jwt` to `pyjwt`. A built-in mapping table and a fallback that lowercases and converts underscores to dashes are also applied (since 2.1.0).
+3. Counts module paths written as strings when they match an installed package. This covers frameworks that load dependencies by name, such as Django's `INSTALLED_APPS = ["corsheaders"]`, `MIDDLEWARE = ["whitenoise.middleware.WhiteNoiseMiddleware"]`, and `"BACKEND": "django_redis.cache.RedisCache"`. Strings that don't match an installed package are ignored (since 2.1.0).
+4. Counts declared dependencies named in run and deploy files in the project root: `Procfile`, `Dockerfile*`, compose files, `Makefile`, `*.sh`, `fly.toml`, `render.yaml`, `app.yaml`, and `.github/workflows/*.yml`. This covers servers such as `gunicorn` and `uvicorn` that are started as commands rather than imported (since 2.1.0).
+5. Compares the result against the project's declared dependencies (from `requirements.txt` or `pyproject.toml`).
+6. Walks the dependency graph (obtained via pipdeptree) to identify packages that are only used indirectly as transitive dependencies of another package.
+7. Packages in the hardcoded ignore list or the `ignored_packages` list from `[tool.pydoctor]` configuration are excluded from detection.
 
 ### Hardcoded ignore list
 
@@ -143,14 +145,15 @@ Additional packages can be excluded by adding them to the `ignored_packages` lis
 
 ### Limitations
 
-- Dynamic imports (`importlib.import_module`, `__import__`) are not tracked. Packages loaded only through dynamic imports may be falsely reported as unused.
+- Module names built at runtime (for example `importlib.import_module(f"plugins.{name}")`) and packages loaded through plugin entry points are not detected. Add such packages to `ignored_packages`.
+- Run and deploy files are only read from the project root (and `.github/workflows/`). A server started from a script in a subdirectory may still be reported.
 - Only declared dependencies are checked. Transitive-only installs that are not declared are not flagged.
 
 ### Issue codes
 
 | Code | Severity | Meaning |
 |---|---|---|
-| `UNUSED_PACKAGE` | warning | A declared dependency has no corresponding imports and is not required by any used package. |
+| `UNUSED_PACKAGE` | warning | Possibly unused: no import, matching module-path string, or run-file reference was found, and no used package depends on it. Confirm before removing. |
 | `UNUSED_TRANSITIVE` | info | A declared dependency is only used indirectly as a transitive dependency of another package. |
 | `UNUSED_NONE_FOUND` | ok | All declared dependencies appear to be utilized. |
 | `UNUSED_NO_DEPS_FILE` | info | No requirements file was found, so unused detection was skipped. |
