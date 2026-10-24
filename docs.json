@@ -44,7 +44,8 @@
           "group": "Guides",
           "pages": [
             "guides/ci-integration",
-            "guides/fixing-issues"
+            "guides/fixing-issues",
+            "guides/troubleshooting"
           ]
         },
         {

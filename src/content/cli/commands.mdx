@@ -94,7 +94,7 @@ pydoctor scan-security
 
 **Scanner keys:** `security`.
 
-**Exit code:** 1 if any vulnerability has ERROR or CRITICAL severity, or when the health score falls below the `min_health_score` threshold. Otherwise 0.
+**Exit code:** 1 if any vulnerability has ERROR or CRITICAL severity, if the OSV database could not be reached (`SEC_SCAN_INCOMPLETE`), or when the health score falls below the `min_health_score` threshold. Otherwise 0.
 
 ### `docker`
 

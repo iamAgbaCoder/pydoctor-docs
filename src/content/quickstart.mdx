@@ -8,6 +8,7 @@ Run a full diagnostic scan on a Python project and understand the output.
 ## Before you begin
 
 - Python 3.10 or later
+- Network access to `api.osv.dev` (for the vulnerability scan) and `pypi.org` (for the outdated-packages check)
 - A Python project with a virtual environment (recommended) and installed dependencies
 
 <Steps>
@@ -16,11 +17,17 @@ Run a full diagnostic scan on a Python project and understand the output.
     pip install pydoctor-cli
     ```
 
+    <Warning title="Install pydoctor-cli, not pydoctor">
+      The PyPI package `pydoctor` is a different project: Twisted's API documentation generator. Both packages install into the same `pydoctor` import directory and both provide a `pydoctor` command, so installing both in one environment breaks whichever was installed first. If you see unexpected output, see [Troubleshooting](/guides/troubleshooting#wrong-pydoctor).
+    </Warning>
+
     Verify the installation:
 
     ```bash
     pydoctor --version
     ```
+
+    You should see `PyDoctor version 2.0.1` or later.
   </Step>
   <Step title="Run a diagnostic scan">
     Navigate to your project directory and run:
@@ -71,3 +78,4 @@ In JSON mode the virtual-environment prompt is skipped and the scan runs non-int
 - See the full list of commands and flags in [Commands](/cli/commands).
 - Set up pydoctor as a CI gate in [CI integration](/guides/ci-integration).
 - Let pydoctor fix issues automatically with [Fixing issues](/guides/fixing-issues).
+- Something not working? See [Troubleshooting](/guides/troubleshooting).

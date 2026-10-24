@@ -3,6 +3,13 @@ title: Changelog
 description: Release history for pydoctor-cli.
 ---
 
+## 2.0.1
+
+- **Security scans fail closed.** When the OSV database cannot be reached, `scan-security`, `diagnose`, and `check` now report `SEC_SCAN_INCOMPLETE` (error, exit code 1) and name the unchecked packages. Previously a network failure produced "No known vulnerabilities" and a perfect score.
+- **Aliased advisories are counted once.** An advisory published under several IDs (for example GHSA and PYSEC) is now reported and scored once. Previously each copy deducted points separately, so one critical vulnerability could cost 50 points instead of 25.
+
+Upgrade with `pip install --upgrade pydoctor-cli`.
+
 ## 2.0.0
 
 Initial documented release of pydoctor-cli. This entry records the baseline feature set; no prior version source is available for comparison.

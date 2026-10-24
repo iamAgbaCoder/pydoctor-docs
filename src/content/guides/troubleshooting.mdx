@@ -1,0 +1,120 @@
+---
+title: Troubleshooting
+description: Fix common pydoctor-cli problems, including the wrong pydoctor package, unreachable vulnerability database, unexpected CI failures, and inconsistent results across runners.
+---
+
+Each entry starts with the symptom you see, explains the cause, and gives the fix. Most problems come from the environment pydoctor-cli runs in rather than from your project.
+
+Before you start, check your version:
+
+```bash
+pydoctor --version
+```
+
+Several fixes below need **2.0.1 or later**. Upgrade with `pip install --upgrade pydoctor-cli`.
+
+<AccordionGroup>
+  <Accordion id="wrong-pydoctor" title="The pydoctor command runs a different tool">
+    **Symptom:** `pydoctor --version` doesn't print `PyDoctor version …`, commands such as `diagnose` aren't recognised, or a tool that used to work breaks after you install pydoctor-cli.
+
+    **Cause:** two unrelated projects share the name. The PyPI package `pydoctor` is Twisted's API documentation generator; this tool is published as `pydoctor-cli`. Both install a top-level `pydoctor` Python package and a `pydoctor` command, so when both are in one environment their files mix and the command points to whichever was installed last.
+
+    **Fix:** remove both, then reinstall only the one you want:
+
+    ```bash
+    pip uninstall -y pydoctor pydoctor-cli
+    pip install pydoctor-cli
+    pydoctor --version
+    ```
+
+    Uninstalling only one isn't enough, because the shared directory can be left half-deleted. If you need both tools, install them in separate virtual environments.
+  </Accordion>
+
+  <Accordion id="scan-incomplete" title="SEC_SCAN_INCOMPLETE: security scan incomplete">
+    **Symptom:** the security section reports `Security scan incomplete: N of N packages not checked` and the command exits with code 1.
+
+    **Cause:** pydoctor-cli couldn't reach the OSV vulnerability database at `https://api.osv.dev` after 3 attempts. Common reasons are no internet access, a corporate proxy or firewall, or a slow connection hitting the 10-second timeout. The packages listed in the issue were **not** checked.
+
+    **Fix:**
+
+    1. Confirm the machine can reach OSV:
+
+       ```bash
+       curl -sS -o /dev/null -w "%{http_code}\n" -X POST https://api.osv.dev/v1/query -d '{}'
+       ```
+
+       Any HTTP status (such as `400`) means OSV is reachable. `000` or a connection error means it isn't.
+    2. If you're behind a proxy, set `HTTPS_PROXY` before running pydoctor. pydoctor-cli uses `requests`, which honours the standard proxy variables.
+    3. On a slow connection, raise the timeout and run the scan again:
+
+       ```bash
+       export PYDOCTOR_REQUEST_TIMEOUT=30
+       pydoctor scan-security
+       ```
+
+    <Note>
+      Before 2.0.1, a network failure here was reported as "No known vulnerabilities" with a perfect score. If you're on 2.0.0 and get a clean result on a machine without internet access, the result is not trustworthy. Upgrade and scan again.
+    </Note>
+  </Accordion>
+
+  <Accordion id="exit-code-1" title="CI fails even though the health score looks fine">
+    **Symptom:** the score is above your `min_health_score`, but the step still exits with code 1.
+
+    **Cause:** the score threshold is only one of two failure conditions. pydoctor-cli also exits 1 whenever **any** issue has `error` or `critical` severity, regardless of score. A single high-severity vulnerability or an exposed secret fails the run on its own.
+
+    **Fix:** find the blocking issues in JSON output:
+
+    ```bash
+    pydoctor check --json > report.json
+    python -c "import json; r = json.load(open('report.json')); [print(i['severity'], i['code'], i['title']) for i in r['issues'] if i['severity'] in ('error', 'critical')]"
+    ```
+
+    Resolve them, or follow the recommendation printed with each issue. See [Exit code summary](/guides/ci-integration#exit-code-summary) for the full rules.
+  </Accordion>
+
+  <Accordion id="runner-differences" title="A vulnerability is flagged on one CI runner but not another">
+    **Symptom:** in a matrix build, the same commit passes on some operating systems or Python versions and fails on one, usually with a vulnerability in a transitive dependency such as `certifi`, `urllib3`, or `idna`.
+
+    **Cause:** some runner images ship with packages already installed. When an installed version already satisfies your requirements, `pip install` keeps it, so one runner can end up with an older, vulnerable version than the others. pydoctor-cli is reporting what's actually installed on that runner.
+
+    **Fix:** upgrade dependencies eagerly in the install step, so every runner gets the latest allowed versions:
+
+    ```bash
+    pip install --upgrade --upgrade-strategy eager -r requirements.txt
+    ```
+
+    For an editable install, use `pip install --upgrade --upgrade-strategy eager -e .` instead.
+  </Accordion>
+
+  <Accordion id="duplicate-advisories" title="The same vulnerability appears twice and the score drops sharply">
+    **Symptom:** one package shows two entries with different IDs that reference each other, for example `GHSA-…` and `PYSEC-…`, and the score is much lower than one finding should cause.
+
+    **Cause:** OSV publishes some advisories under several databases. Before 2.0.1, pydoctor-cli reported each copy and deducted points for each, so one critical vulnerability could cost 50 points instead of 25.
+
+    **Fix:** upgrade to 2.0.1 or later. Duplicates are merged into one entry at the highest severity:
+
+    ```bash
+    pip install --upgrade pydoctor-cli
+    ```
+  </Accordion>
+
+  <Accordion id="stale-results" title="A vulnerability you already fixed is still reported">
+    **Symptom:** you upgraded a package, but the scan still reports an old advisory, or a newly published advisory doesn't appear yet.
+
+    **Cause:** OSV results are cached in `~/.pydoctor/cache.json` for one hour by default.
+
+    **Fix:** clear the cache or bypass it for one run:
+
+    ```bash
+    pydoctor cache clear
+    # or
+    pydoctor diagnose --no-cache
+    ```
+
+    To change how long results are cached, set `PYDOCTOR_CACHE_TTL` (in seconds). See [Configuration](/configuration#cache).
+  </Accordion>
+</AccordionGroup>
+
+## Still stuck?
+
+Run the failing command with `--verbose` to see per-scanner timing and details, then [open an issue](https://github.com/iamAgbaCoder/pydoctor-cli/issues) with the output, your `pydoctor --version`, and your operating system.

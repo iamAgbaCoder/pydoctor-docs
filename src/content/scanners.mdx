@@ -95,7 +95,9 @@ Queries the OSV (Open Source Vulnerabilities) batch API for known CVEs, GHSA adv
 2. Builds query batches of up to 100 packages and sends them to the OSV `/v1/querybatch` endpoint.
 3. Makes up to 3 attempts per batch request with exponential backoff (1 s, 2 s between attempts).
 4. When the batch response is missing summary and details for a vulnerability, the scanner deep-fetches the full advisory from `/v1/vulns/{id}`.
-5. Results are cached per package and version (MD5 key) in the local cache file (`~/.pydoctor/cache.json`). Cached entries are reused on subsequent scans within the TTL window (default 3600 s, configurable with `PYDOCTOR_CACHE_TTL`).
+5. Collapses duplicate advisories. OSV often lists one advisory under several IDs, such as a GHSA entry and a PYSEC entry that name each other as aliases. Records for the same package and version whose IDs or aliases overlap are reported once, at the highest severity among them (since 2.0.1).
+6. If every attempt for a batch fails (network error, proxy block, or timeout), the scanner fails closed: it reports `SEC_SCAN_INCOMPLETE` and lists the packages it could not check, instead of reporting the project as clean (since 2.0.1).
+7. Results are cached per package and version (MD5 key) in the local cache file (`~/.pydoctor/cache.json`). Cached entries are reused on subsequent scans within the TTL window (default 3600 s, configurable with `PYDOCTOR_CACHE_TTL`).
 
 ### Severity mapping
 
@@ -114,6 +116,7 @@ OSV / CVSS severity strings are mapped to pydoctor-cli severities:
 | Code | Severity | Meaning |
 |---|---|---|
 | `SEC_VULNERABILITY` | varies (see mapping above) | A known vulnerability was found for an installed package. |
+| `SEC_SCAN_INCOMPLETE` | error | The OSV database could not be reached for some or all packages. Those packages were not checked. The unchecked package names are in the issue's `extra.unchecked_packages` field in JSON output. |
 | `SEC_NO_VULNS` | ok | No vulnerabilities were found across all scanned packages. |
 | `SEC_NO_PACKAGES` | info | No installed packages were available to scan. |
 | `SEC_PLATFORM_INFO` | info | Informational context about the scan environment. |
