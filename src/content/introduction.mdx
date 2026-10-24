@@ -4,7 +4,7 @@ description: pydoctor-cli scans Python projects for security vulnerabilities, de
 mode: home
 ---
 
-pydoctor-cli 2.0.0 is a command-line tool that scans Python projects for common dependency and security problems. It requires Python 3.10 or later and works with pip, Poetry, uv, and pdm.
+pydoctor-cli is a command-line tool that scans Python projects for common dependency and security problems. It requires Python 3.10 or later and works with pip, Poetry, uv, and pdm. See the [changelog](/changelog) for the latest release.
 
 ## What it scans
 
@@ -21,7 +21,7 @@ pydoctor-cli runs six scanners, each focused on a different risk area:
     Lists installed packages with newer releases available, flagging major version gaps as warnings.
   </Card>
   <Card title="Unused packages" icon="trash" href="/scanners">
-    Compares AST-extracted imports against declared dependencies to find packages you no longer use.
+    Finds declared dependencies that nothing in your code, settings, or run files appears to use.
   </Card>
   <Card title="Environment health" icon="desktop" href="/scanners">
     Checks your Python version, virtual environment, and pip version against recommended baselines.

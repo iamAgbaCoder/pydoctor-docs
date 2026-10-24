@@ -176,12 +176,12 @@ const templateSiteConfig: SiteConfig = {
 // Managed by Thally Cloud onboarding.
 export const siteConfig: SiteConfig = {
   ...templateSiteConfig,
-  name: "Pydoctor Docs",
-  description: "Documentation for PyDoctor CLI",
+  name: "PyDoctor",
+  description: "Documentation for pydoctor-cli, the Python project health scanner",
   repoUrl: "https://github.com/iamAgbaCoder/pydoctor-docs",
   links: [
     { label: "Get started", href: "/quickstart" },
-    { label: "Support", href: "https://github.com/iamAgbaCoder/pydoctor-docs/issues/new" },
+    { label: "Support", href: "https://github.com/iamAgbaCoder/pydoctor-cli/issues/new" },
     { label: "GitHub", href: "https://github.com/iamAgbaCoder/pydoctor-docs" },
     { label: "Changelog", href: "/changelog" },
   ],
