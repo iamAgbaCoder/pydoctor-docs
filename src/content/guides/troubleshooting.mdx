@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting
-description: Fix common pydoctor-cli problems, including the wrong pydoctor package, unreachable vulnerability database, unexpected CI failures, and inconsistent results across runners.
+description: Fix common pydoctor-cli problems, including scanning the wrong Python, the wrong pydoctor package, unreachable vulnerability database, false secret findings, unexpected CI failures, and inconsistent results across runners.
 ---
 
 Each entry starts with the symptom you see, explains the cause, and gives the fix. Most problems come from the environment pydoctor-cli runs in rather than from your project.
@@ -11,9 +11,41 @@ Before you start, check your version:
 pydoctor --version
 ```
 
-Several fixes below need **2.0.1 or later**, and two need **2.1.0 or later**. Upgrade with `pip install --upgrade pydoctor-cli`.
+Several fixes below need a recent version; each entry says which. The latest is **2.2.0**. Upgrade with `pip install --upgrade pydoctor-cli` (or `pipx upgrade pydoctor-cli`).
 
 <AccordionGroup>
+  <Accordion id="all-clear-zero-packages" title="Everything is OK, but the report shows 0 installed packages">
+    **Symptom:** every check passes and the Environment panel shows `Installed Packages: 0`, or a Python version that isn't your project's.
+
+    **Cause:** before 2.2.0, pydoctor read the environment through its own interpreter and `pip list`. Installed with pipx or `uv tool`, or scanning a uv environment (which has no pip), it saw nothing and reported nothing wrong.
+
+    **Fix:** upgrade to 2.2.0 or later. pydoctor now reads the project's interpreter directly and shows which one it used. If the scan still can't read it, you get `ENV_PACKAGES_UNAVAILABLE` instead of a clean result.
+  </Accordion>
+
+  <Accordion id="wrong-python" title="pydoctor scanned the wrong Python (ENV_DEPS_NOT_INSTALLED)">
+    **Symptom:** the Environment panel's **Interpreter** isn't your project's, or you get `ENV_DEPS_NOT_INSTALLED: None of the project's dependencies are installed in the scanned Python`.
+
+    **Cause:** pydoctor didn't find your project's virtualenv, so it fell back to another interpreter, usually `python3` on `PATH`. This happens when the environment lives outside the project folder (for example pyenv-virtualenv, conda, or virtualenvwrapper) and isn't activated.
+
+    **Fix:** activate the environment before scanning, or tell pydoctor which interpreter to use:
+
+    ```bash
+    pydoctor diagnose --python ~/.virtualenvs/myproject/bin/python
+    # or, for every run in this shell
+    export PYDOCTOR_PYTHON=~/.virtualenvs/myproject/bin/python
+    ```
+
+    See [Scanned environment](/scanners#scanned-environment) for the order pydoctor checks.
+  </Accordion>
+
+  <Accordion id="packages-unavailable" title="ENV_PACKAGES_UNAVAILABLE: couldn't read the project's installed packages">
+    **Symptom:** the scan exits with code 1 and reports `Couldn't read the project's installed packages`.
+
+    **Cause:** the chosen interpreter couldn't run or didn't answer. The message includes the path and the reason, for example `interpreter not found` after the virtualenv was deleted or moved.
+
+    **Fix:** recreate or activate the virtualenv, or pass a working interpreter with `--python`. Security, dependency, outdated and unused checks are skipped until the environment can be read; `check --ci` still works.
+  </Accordion>
+
   <Accordion id="wrong-pydoctor" title="The pydoctor command runs a different tool">
     **Symptom:** `pydoctor --version` doesn't print `PyDoctor version …`, commands such as `diagnose` aren't recognised, or a tool that used to work breaks after you install pydoctor-cli.
 
@@ -125,6 +157,42 @@ Several fixes below need **2.0.1 or later**, and two need **2.1.0 or later**. Up
     ```
 
     Don't remove packages based on this report alone. Findings are labelled "Possibly unused" for that reason.
+  </Accordion>
+
+  <Accordion id="secret-false-positive" title="check --ci reports a secret that isn't one">
+    **Symptom:** `SECRET_EXPOSED_GENERIC_SECRET` or another secret finding points at a test value, a sample or an example.
+
+    **Fix:** first confirm the value really isn't a credential. Then add a comment to that line:
+
+    ```python
+    DEMO_TOKEN = "a1b2c3d4e5f6g7h8"  # pydoctor: ignore
+    ```
+
+    Test files and documentation are already treated differently; see [CI/CD scanner](/scanners#ci-cd) for the rules. If a whole category keeps misfiring in a real project, [open an issue](https://github.com/iamAgbaCoder/pydoctor-cli/issues) with the line (with the value replaced).
+  </Accordion>
+
+  <Accordion id="env-file-committed" title="CI_ENV_FILE_COMMITTED: environment file committed to git">
+    **Symptom:** `check --ci` reports `Environment file committed to git: .env`.
+
+    **Cause:** `.env` files usually hold real credentials, and this one is tracked by git, so it's in the repository's history for anyone with access.
+
+    **Fix:**
+
+    ```bash
+    git rm --cached .env
+    echo ".env" >> .gitignore
+    git commit -m "Stop tracking .env"
+    ```
+
+    Then rotate every credential the file contained: removing it from the latest commit doesn't remove it from history. Commit a `.env.example` with placeholder values for other developers.
+  </Accordion>
+
+  <Accordion id="score-changed" title="My score changed after upgrading to 2.2.0">
+    **Symptom:** the same project scores very differently on 2.2.0 than on 2.1.0, usually higher.
+
+    **Cause:** 2.2.0 fixed how severity and the score are calculated. Earlier versions rated most network-reachable vulnerabilities critical regardless of their real CVSS score, and counted every advisory separately, so one package with 50 advisories could take the score to 0.
+
+    **Fix:** nothing to fix. If you use `min_health_score` in CI, check the new score and adjust the threshold if needed. See [Set a minimum health score](/guides/ci-integration#set-a-minimum-health-score) for how scoring works now.
   </Accordion>
 
   <Accordion id="stale-results" title="A vulnerability you already fixed is still reported">

@@ -24,7 +24,7 @@ This scans the project with all scanners, then walks through fixable issues. By 
 
 The command handles four categories of fixes in order:
 
-1. **Vulnerable packages** are upgraded to the lowest version that fixes every known advisory for that package. You're asked once per package, not once per advisory.
+1. **Vulnerable packages** are upgraded to the lowest version that fixes every known advisory for that package. You're asked once per package, not once per advisory. Each advisory's fix comes from your release line: with Django 5.1.2 installed, an advisory fixed in 4.2.17, 5.0.10 and 5.1.4 targets 5.1.4.
 2. **Outdated packages** are upgraded to the latest version (enabled by default). Packages already upgraded in step 1 are skipped.
 3. **Dependency conflicts** are resolved by installing missing packages or correcting version mismatches.
 4. **Virtual environment creation** if no venv is detected, a `.venv` directory is created.
@@ -51,7 +51,7 @@ After each upgrade, `fix` checks the installed version again:
      Your project declares "pillow==12.2.0", which blocks the upgrade. Loosen it, then run `pydoctor fix pillow` again.
   ```
 
-Only verified upgrades count toward the "fixes applied" total.
+Only verified upgrades count toward the "fixes applied" total. Verification reads the installed version from the project interpreter itself, so it also works in uv environments, which have no pip.
 
 ## Options
 
