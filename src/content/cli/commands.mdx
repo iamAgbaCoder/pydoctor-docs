@@ -104,7 +104,7 @@ pydoctor scan-security
 
 ### `docker`
 
-**Preview.** Check for a Dockerfile and whether it uses a Python base image. This command does not run any scanners, and doesn't inspect images or containers.
+Check for a Dockerfile and whether it uses a Python base image. This command does not run any scanners. It is a preview feature that only checks the Dockerfile; it does not inspect images or containers.
 
 ```bash
 pydoctor docker
@@ -122,7 +122,7 @@ A positional `image` argument is accepted but currently unused beyond display.
 
 ### `github`
 
-Run a scan with CI mode enabled. Checks git repository status when not in JSON mode.
+Run the CI/CD guard on a local git checkout. Checks git repository status when not in JSON mode.
 
 ```bash
 pydoctor github
@@ -192,7 +192,7 @@ pydoctor check-env
 | Option | Short | Default | Description |
 |---|---|---|---|
 | `--path` | `-p` | `.` | Project directory to scan. |
-| `--python` | | auto-detect | Python interpreter of the project to scan. Also `PYDOCTOR_PYTHON`. See [Scanned environment](/scanners#scanned-environment). |
+| `--python` | | auto-detect | Python interpreter of the project to scan. Also settable with `PYDOCTOR_PYTHON`. |
 | `--json` | `-j` | `false` | Output results as JSON. |
 | `--verbose` | `-v` | `false` | Show detailed output and timing. |
 
@@ -236,4 +236,4 @@ There is no `cache info` subcommand. Only `clear` and `purge` are implemented.
 
 ## Cache bypass behavior
 
-The `--no-cache` flag on the `diagnose` command ignores cached advisories for that run and writes fresh results back, so the next scan benefits from them. To empty the cache, use `pydoctor cache clear`. (Before 2.2.0, `--no-cache` deleted the whole cache.)
+The `--no-cache` flag on the `diagnose` command skips reading cached results for the current run. Fresh data is fetched from the OSV API and written back to the cache, so subsequent runs without `--no-cache` use the updated entries. The flag does not delete the cache file; use `cache clear` for that.

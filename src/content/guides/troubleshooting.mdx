@@ -11,7 +11,7 @@ Before you start, check your version:
 pydoctor --version
 ```
 
-Several fixes below need a recent version; each entry says which. The latest is **2.2.0**. Upgrade with `pip install --upgrade pydoctor-cli` (or `pipx upgrade pydoctor-cli`).
+Several fixes below need **2.0.1 or later**, two need **2.1.0 or later**, and one needs **2.2.0 or later**. Upgrade with `pip install --upgrade pydoctor-cli`.
 
 <AccordionGroup>
   <Accordion id="all-clear-zero-packages" title="Everything is OK, but the report shows 0 installed packages">
@@ -200,13 +200,15 @@ Several fixes below need a recent version; each entry says which. The latest is 
 
     **Cause:** OSV results are cached in `~/.pydoctor/cache.json` for one hour by default.
 
-    **Fix:** clear the cache or bypass it for one run:
+    **Fix:** bypass the cache for one run, or clear it entirely:
 
     ```bash
-    pydoctor cache clear
-    # or
     pydoctor diagnose --no-cache
+    # or
+    pydoctor cache clear
     ```
+
+    `--no-cache` skips reading cached results and fetches fresh data from the OSV API. `cache clear` deletes the entire cache file.
 
     To change how long results are cached, set `PYDOCTOR_CACHE_TTL` (in seconds). See [Configuration](/configuration#cache).
   </Accordion>

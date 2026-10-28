@@ -31,9 +31,10 @@ The minimum health score (0 to 100) required for a scan to exit successfully. Wh
 
 ## Environment variables
 
-Environment variables let you tune network and concurrency settings without changing project files. They apply to every pydoctor-cli invocation in the current shell session.
+Environment variables let you tune network, concurrency, and interpreter settings without changing project files. They apply to every pydoctor-cli invocation in the current shell session.
 
 ```bash
+export PYDOCTOR_PYTHON=/path/to/venv/bin/python
 export PYDOCTOR_CACHE_TTL=7200
 export PYDOCTOR_REQUEST_TIMEOUT=30
 export PYDOCTOR_MAX_WORKERS=4
@@ -42,9 +43,9 @@ export PYDOCTOR_PYTHON=.venv/bin/python
 
 ### `PYDOCTOR_PYTHON`
 
-Interpreter of the project to scan, same as `--python`. Useful in CI or scripts where you always want a specific environment. When unset, pydoctor finds one; see [Scanned environment](/scanners#scanned-environment).
+Path to the Python interpreter of the project to scan. When set, pydoctor-cli uses this interpreter instead of auto-detecting one. The `--python` CLI flag takes precedence over this variable.
 
-**Default:** unset (auto-detect)
+**Default:** not set (auto-detect)
 
 ### `PYDOCTOR_CACHE_TTL`
 
@@ -78,6 +79,6 @@ pydoctor cache clear
 pydoctor cache purge
 ```
 
-The `--no-cache` flag on the `diagnose` command ignores cached advisories for that run and refreshes them. Cache keys include a format version, so results cached by an older pydoctor aren't reused after an upgrade.
+The `--no-cache` flag on the `diagnose` command bypasses cached results for that run. Fresh data is fetched and written back to the cache, so subsequent runs use the updated entries. To delete the cache entirely, use `cache clear`.
 
 If the cache file becomes corrupted or unreadable, pydoctor-cli silently resets it and continues normally.

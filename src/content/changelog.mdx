@@ -5,19 +5,18 @@ description: Release history for pydoctor-cli.
 
 ## 2.2.0
 
-Every change in this release removes a case where pydoctor reported a problem as fine, or got a severity wrong.
-
-- **Scans the right environment.** Facts come from your project's interpreter, not pydoctor's. Under pipx or `uv tool`, and in uv environments (which have no pip), 2.1.0 saw 0 packages and reported everything as OK. Works without pip. New `--python` option and `PYDOCTOR_PYTHON`; the report shows which interpreter was scanned and why. See [Scanned environment](/scanners#scanned-environment).
-- **Fails loudly.** `ENV_PACKAGES_UNAVAILABLE` (error) when the environment can't be read, `ENV_DEPS_NOT_INSTALLED` (warning) when the scanned Python has none of your dependencies, and `PKG_OUTDATED_UNAVAILABLE` when the outdated check can't run, instead of "all up to date".
-- **Virtualenv detection works.** It always reported "active". The `diagnose` no-venv prompt now appears, and never blocks CI or piped runs.
-- **Real CVSS severity.** Calculated from the CVSS v3 vector. Previously a 3.1 (Low) and a 9.8 (Critical) vulnerability were both shown as critical. GitHub's `MODERATE` is now medium.
-- **Right fix version.** For advisories with one fix per release line, `fix` targets yours (Django 5.1.2 → 5.1.4, not 4.2.17).
-- **CI guard finds real leaks.** Scans every committed text file, with rules for Stripe, OpenAI, Anthropic, Slack, Google, private keys, database URLs and `SECRET_KEY` settings; flags committed `.env` files; checks workflows for `pull_request_target` pwn requests, script injection and `write-all`. Line numbers, redacted previews, and `# pydoctor: ignore`. See [CI/CD scanner](/scanners#ci-cd).
-- **A score that moves.** A package's advisories count once, categories have diminishing returns, and any critical issue keeps the score at 69 or below. Expect different, usually higher, scores.
-- **JSON.** Includes `health`; `scan-security --json` reports advisory IDs (it reported `SEC_VULNERABILITY` for every entry), aliases, fixed version and CVSS score.
-- **Smaller fixes.** Database drivers, password hashers and cache clients selected by Django settings count as used; advisories are fetched in parallel; `--no-cache` bypasses the cache instead of deleting it; `github <repo>` and `docker` describe what they actually do.
-
-Upgrade with `pip install --upgrade pydoctor-cli`.
+- **Explicit interpreter selection.** All scan commands accept `--python` to specify the project's Python interpreter. The `PYDOCTOR_PYTHON` environment variable provides the same control for CI and scripted use. Auto-detection now describes where it found the interpreter (shown in the terminal report).
+- **Expanded secret scanning.** The CI scanner now checks all committed files (not just `.py`) against 12 provider-specific rules (AWS, GitHub, PyPI, Stripe, Anthropic, OpenAI, Slack, Google, private keys, database URLs, framework secret keys) plus a generic entropy-based rule. Low-confidence findings are reported at error severity; high-confidence at critical. Findings include file paths and line numbers. Add `# pydoctor: ignore` on a line to suppress it. `.env` files tracked by git or missing from `.gitignore` are flagged.
+- **New workflow checks.** The CI scanner now detects script injection (untrusted GitHub context in `run:` blocks), `permissions: write-all`, and `pull_request_target` workflows that check out PR code. Unpinned action detection is expanded to cover `dev`, `develop`, `head`, and `trunk` branches. Cleartext-secret detection now only flags values that look like real credentials.
+- **CVSS v3 scoring.** Vulnerability severity is computed from the advisory's CVSS v3 vector string when available, replacing the previous heuristic. The CVSS base score is included in terminal and JSON output. The `MODERATE` severity label (used by GitHub advisories) is now recognised.
+- **Version-aware fix targets.** Vulnerability recommendations now show the fix version for the installed release series, so upgrading within a major line is straightforward.
+- **Health score improvements.** Each category has a cap on total deductions with diminishing returns for additional issues. Security vulnerabilities are grouped per package so one upgrade resolves all advisories for that package. Any critical-severity issue caps the score at 69, preventing a Good or Excellent verdict. A new Incomplete verdict appears when part of the scan could not run.
+- **pip-free environment support.** The dependency scanner inspects distribution metadata directly when pip is not available, and the outdated-packages scanner falls back to `uv pip list --outdated`. The environment scanner treats pip absence in uv-managed environments as informational rather than an error.
+- **`--no-cache` behavior change.** The flag now bypasses cached results for the current run instead of deleting the entire cache file. Fresh data is still written back to the cache.
+- **Withdrawn advisory filtering.** OSV advisories that have been withdrawn are no longer reported.
+- **Unused-package detection.** Django database backends, URL schemes, hashers, and cache backends are now mapped to their driver packages, reducing false positives.
+- **Docker command.** Relabelled from beta to preview, with a clarified scope description.
+- **Non-interactive prompt.** The virtual-environment confirmation prompt in `diagnose` is skipped automatically when stdin is not a terminal.
 
 ## 2.1.0
 

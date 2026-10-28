@@ -58,6 +58,7 @@ Only verified upgrades count toward the "fixes applied" total. Verification read
 | Flag | Default | Effect |
 |---|---|---|
 | `--path` / `-p` | `.` | Path to the project directory to scan and fix. |
+| `--python` | auto-detect | Python interpreter of the project to scan. Also settable with `PYDOCTOR_PYTHON`. |
 | `--safe` / `--no-safe` | `--safe` | When safe, each fix requires interactive confirmation. Pass `--no-safe` to apply all fixes without prompting. |
 | `--upgrade` / `--no-upgrade` | `--upgrade` | Upgrade outdated packages. Pass `--no-upgrade` to skip outdated-package upgrades. |
 | `--remove` / `--no-remove` | `--remove` is off | Remove unused packages. Must be explicitly enabled with `--remove` for unused-package removal to run. |

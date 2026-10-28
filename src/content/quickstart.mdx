@@ -40,9 +40,7 @@ Run a full diagnostic scan on a Python project and understand the output.
 
     This runs every built-in scanner (environment, dependencies, outdated packages, security vulnerabilities, unused packages, and CI hygiene) and prints a report to your terminal.
 
-    The **Environment** panel shows which interpreter was scanned and how pydoctor found it, for example `.venv/ in the project`. If that's not your project's environment, run the scan again with `--python path/to/python`.
-
-    If the interpreter isn't a virtual environment, pydoctor warns you and, in an interactive terminal, asks before continuing with system-wide packages.
+    If no virtual environment is detected, pydoctor prompts you to confirm before continuing with system-wide packages. You can activate a virtual environment and retry, or confirm to proceed. In non-interactive environments (CI, piped input), the prompt is skipped automatically.
   </Step>
   <Step title="Read the results">
     The report groups issues by category and assigns each one a severity:
