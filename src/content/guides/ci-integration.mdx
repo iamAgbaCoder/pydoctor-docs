@@ -83,20 +83,52 @@ min_health_score = 70
 
 With this setting, pydoctor-cli returns exit code 1 if the health score is below 70, even when no individual issue reaches ERROR or CRITICAL severity.
 
-Score penalties are weighted by category and severity. Each category has a cap on total deductions (security: 60, CI: 50, dependencies: 40, environment: 30, outdated: 15, unused: 10), and additional issues within a category have diminishing returns. Security vulnerabilities are grouped per package, so one upgrade fixes all advisories for that package and the penalty reflects only the worst advisory. Any critical-severity issue caps the score at 69. The score is clamped to 0 at the lower bound.
+Score penalties are weighted by category and severity:
+
+- **Per package, not per advisory.** A vulnerable package costs the penalty of its worst advisory (25 for critical, 12 for error, 6 for warning), however many advisories it has.
+- **Capped per category, with diminishing returns.** Security can cost at most 60 points, CI/CD 50, dependencies 40, environment 30, outdated packages 15 and unused packages 10. Each extra issue in a category costs a little less than the one before.
+- **Critical ceiling.** Any critical issue keeps the score at 69 or below.
+
+As a result, upgrading a single vulnerable package raises the score even in a project with many problems. Scores from 2.2.0 are usually higher than from earlier versions, which counted every advisory separately and overrated many vulnerabilities as critical.
 
 ## Exit code summary
 
 pydoctor-cli returns exit code 1 when either condition is true:
 
-- Any issue has ERROR or CRITICAL severity.
+- Any issue has ERROR or CRITICAL severity. This includes `ENV_PACKAGES_UNAVAILABLE`, when pydoctor can't read the environment, and `SEC_SCAN_INCOMPLETE`, when the vulnerability database can't be reached.
 - `min_health_score` is set to a value greater than 0 in `[tool.pydoctor]` and the calculated health score falls below that threshold.
 
 Otherwise the exit code is 0.
 
 ## Parse JSON output
 
-When you pass `--json`, pydoctor-cli writes a JSON object to stdout. Every JSON report includes a `health` object with `score` and `verdict` fields. For security-only scans (`scan-security`), the output uses a simplified shape with a `vulnerabilities` array; each vulnerability includes `advisory` (the advisory ID such as GHSA or CVE), `aliases`, `fixed_in`, `cvss_score`, `severity`, `summary`, and `code` fields. For all other commands, including `check --ci`, the output contains the full scan report with fields like `issues`, `scan_path`, `scanned_at`, and `scan_duration_ms`.
+When you pass `--json`, pydoctor-cli writes a JSON object to stdout. Every shape includes `health`, with the `score` and `verdict`.
+
+For all commands except `scan-security`, the output is the full scan report: `issues`, `summary` (count per severity), `scan_path`, `scanned_at`, `scan_duration_ms` and `health`. Each issue has `category`, `code`, `severity`, `title`, `description`, `recommendation`, `package` and `extra`.
+
+`scan-security` uses a compact shape with a `vulnerabilities` array:
+
+```json
+{
+  "scan_type": "security",
+  "health": { "score": 89, "verdict": "Good" },
+  "vulnerabilities": [
+    {
+      "package": "requests",
+      "version": "2.31.0",
+      "advisory": "GHSA-9wx4-h78v-vm56",
+      "aliases": ["CVE-2024-35195"],
+      "fixed_in": "2.32.0",
+      "cvss_score": 5.6,
+      "severity": "error",
+      "summary": "Requests Session object does not verify requests after making first request with verify=False",
+      "code": "SEC_VULNERABILITY"
+    }
+  ]
+}
+```
+
+`advisory` is the advisory ID. (Before 2.2.0 it held the issue code, `SEC_VULNERABILITY`, for every entry.) A `SEC_SCAN_INCOMPLETE` entry lists the packages that weren't checked in `unchecked_packages`.
 
 To save the report as a CI artifact:
 
@@ -117,10 +149,10 @@ If you only need a specific check in CI, use a targeted command instead of the f
 
 | Command | What it checks |
 |---|---|
-| `check --ci` | Exposed secrets, `.env` file hygiene, unpinned actions, script injection, broad permissions, and other workflow risks |
+| `check --ci` | Committed secrets and `.env` files, and risky workflow patterns |
 | `scan-security` | Known vulnerabilities via the OSV API |
 | `scan-deps` | Dependency version conflicts |
-| `scan-unused` | Unused packages (AST-based import analysis) |
+| `scan-unused` | Possibly unused dependencies |
 | `check-env` | Python version and virtual environment health |
 
 Each targeted command applies the same exit code logic, so it works as a pipeline gate on its own.

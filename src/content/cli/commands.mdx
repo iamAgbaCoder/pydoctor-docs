@@ -26,16 +26,16 @@ pydoctor diagnose
 | Option | Short | Default | Description |
 |---|---|---|---|
 | `--path` | `-p` | `.` | Project directory to scan. |
-| `--python` | | auto-detect | Python interpreter of the project to scan. Also settable with `PYDOCTOR_PYTHON`. |
+| `--python` | | auto-detect | Python interpreter of the project to scan. Also `PYDOCTOR_PYTHON`. See [Scanned environment](/scanners#scanned-environment). |
 | `--json` | `-j` | `false` | Output results as JSON. |
 | `--verbose` | `-v` | `false` | Show detailed output and timing. |
-| `--no-cache` | | `false` | Bypass the local vulnerability cache for this run. |
+| `--no-cache` | | `false` | Ignore cached advisories for this run (and refresh them). |
 
-When running without `--json`, pydoctor prompts for confirmation if no virtual environment is detected. The prompt is skipped in JSON mode and in non-interactive environments (CI pipelines, piped input).
+When the scanned interpreter isn't a virtual environment, pydoctor prints a warning naming it and, in an interactive terminal, asks whether to continue. It never prompts in JSON mode, in CI, or when input is piped, so non-interactive runs aren't blocked.
 
 **Scanner keys:** all registered scanners (environment, dependencies, outdated, security, unused, ci).
 
-**Exit code:** 1 when any issue has ERROR or CRITICAL severity, or when the calculated health score falls below the `min_health_score` threshold set in `[tool.pydoctor]`. Otherwise 0.
+**Exit code:** 1 when any issue has ERROR or CRITICAL severity (including `ENV_PACKAGES_UNAVAILABLE` when the environment can't be read), or when the calculated health score falls below the `min_health_score` threshold set in `[tool.pydoctor]`. Otherwise 0.
 
 ### `check`
 
@@ -48,7 +48,7 @@ pydoctor check --ci
 | Option | Short | Default | Description |
 |---|---|---|---|
 | `--path` | `-p` | `.` | Project directory to scan. |
-| `--python` | | auto-detect | Python interpreter of the project to scan. Also settable with `PYDOCTOR_PYTHON`. |
+| `--python` | | auto-detect | Python interpreter of the project to scan. Also `PYDOCTOR_PYTHON`. See [Scanned environment](/scanners#scanned-environment). |
 | `--ci` | | `false` | Restrict the scan to only the `ci` scanner. |
 | `--json` | `-j` | `false` | Output results as JSON. |
 | `--verbose` | `-v` | `false` | Show detailed output and timing. |
@@ -68,7 +68,7 @@ pydoctor fix
 | Option | Short | Default | Description |
 |---|---|---|---|
 | `--path` | `-p` | `.` | Project directory to scan. |
-| `--python` | | auto-detect | Python interpreter of the project to scan. Also settable with `PYDOCTOR_PYTHON`. |
+| `--python` | | auto-detect | Python interpreter of the project to scan. Also `PYDOCTOR_PYTHON`. See [Scanned environment](/scanners#scanned-environment). |
 | `--safe` / `--no-safe` | | `--safe` | When safe, confirm each action interactively. |
 | `--upgrade` / `--no-upgrade` | | `--upgrade` | Upgrade outdated packages. |
 | `--remove` / `--no-remove` | | `--no-remove` | Remove unused packages. |
@@ -94,7 +94,7 @@ pydoctor scan-security
 | Option | Short | Default | Description |
 |---|---|---|---|
 | `--path` | `-p` | `.` | Project directory to scan. |
-| `--python` | | auto-detect | Python interpreter of the project to scan. Also settable with `PYDOCTOR_PYTHON`. |
+| `--python` | | auto-detect | Python interpreter of the project to scan. Also `PYDOCTOR_PYTHON`. See [Scanned environment](/scanners#scanned-environment). |
 | `--json` | `-j` | `false` | Output results as JSON. |
 | `--verbose` | `-v` | `false` | Show detailed output and timing. |
 
@@ -131,11 +131,11 @@ pydoctor github
 | Option | Short | Default | Description |
 |---|---|---|---|
 | `--path` | `-p` | `.` | Project directory to scan. |
-| `--python` | | auto-detect | Python interpreter of the project to scan. Also settable with `PYDOCTOR_PYTHON`. |
+| `--python` | | auto-detect | Python interpreter of the project to scan. Also `PYDOCTOR_PYTHON`. See [Scanned environment](/scanners#scanned-environment). |
 | `--json` | `-j` | `false` | Output results as JSON. |
 | `--verbose` | `-v` | `false` | Show detailed output and timing. |
 
-A positional `repo` argument is accepted but remote repository scanning is not supported. If provided, pydoctor prints a warning and scans the local `--path` instead.
+A positional `repo` argument is accepted but remote repositories aren't supported yet: pydoctor prints a warning and scans `--path`.
 
 **Scanner keys:** only the `ci` scanner (CI mode is always on, which restricts the scan to the `ci` scanner).
 
@@ -154,7 +154,7 @@ pydoctor scan-unused
 | Option | Short | Default | Description |
 |---|---|---|---|
 | `--path` | `-p` | `.` | Project directory to scan. |
-| `--python` | | auto-detect | Python interpreter of the project to scan. Also settable with `PYDOCTOR_PYTHON`. |
+| `--python` | | auto-detect | Python interpreter of the project to scan. Also `PYDOCTOR_PYTHON`. See [Scanned environment](/scanners#scanned-environment). |
 | `--json` | `-j` | `false` | Output results as JSON. |
 | `--verbose` | `-v` | `false` | Show detailed output and timing. |
 
@@ -173,7 +173,7 @@ pydoctor scan-deps
 | Option | Short | Default | Description |
 |---|---|---|---|
 | `--path` | `-p` | `.` | Project directory to scan. |
-| `--python` | | auto-detect | Python interpreter of the project to scan. Also settable with `PYDOCTOR_PYTHON`. |
+| `--python` | | auto-detect | Python interpreter of the project to scan. Also `PYDOCTOR_PYTHON`. See [Scanned environment](/scanners#scanned-environment). |
 | `--json` | `-j` | `false` | Output results as JSON. |
 | `--verbose` | `-v` | `false` | Show detailed output and timing. |
 
@@ -214,7 +214,7 @@ No options. Exit code 0.
 
 ### `cache clear`
 
-Delete the entire local cache file at `~/.pydoctor/cache.json`.
+Empty the local cache file at `~/.pydoctor/cache.json`.
 
 ```bash
 pydoctor cache clear
