@@ -5,6 +5,13 @@ description: Detection logic, issue codes, severity mapping, and limitations for
 
 pydoctor-cli ships six scanners. Each scanner receives a `ProjectContext` and returns a list of `Issue` objects. Scanners run concurrently in a `ThreadPoolExecutor` (up to `PYDOCTOR_MAX_WORKERS` threads, default 8). If one scanner crashes, the others continue and a `SCANNER_ERROR` issue is added to the report.
 
+Before scanners run, the analyzer checks whether the project environment is readable. Scanners that need installed-package data (environment, dependencies, outdated, security, unused) return early when the environment cannot be probed. Two context-level issue codes cover this:
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `ENV_PACKAGES_UNAVAILABLE` | error | The project environment could not be read. The recommendation includes `--python` and `PYDOCTOR_PYTHON` as remedies. |
+| `ENV_DEPS_NOT_INSTALLED` | warning | The scanned Python interpreter has none of the project's declared dependencies installed. |
+
 ## Environment
 
 Registry key: `environment`
@@ -17,7 +24,7 @@ Checks Python version, virtual-environment state, pip version, and platform deta
 |---|---|
 | Python version | Compares the running Python `(major, minor)` against a minimum threshold of `(3, 8)` and a recommended threshold of `(3, 11)`. Below minimum is an error; below recommended is a warning. |
 | Virtual environment | Reports whether the project is running inside a virtual environment. |
-| pip version | Calls pip to obtain its version string. If the major version is below 21, a warning is raised. If pip is not found at all, an error is raised. |
+| pip version | Reads the pip version from the project environment. If the major version is below 21, a warning is raised. In uv-managed environments where pip is intentionally absent, an informational note is reported instead of an error. If pip is missing and uv is not detected, a warning is raised. |
 | Platform info | Emits an informational issue with the OS name, architecture, and Python executable path. |
 
 ### Issue codes
@@ -29,7 +36,8 @@ Checks Python version, virtual-environment state, pip version, and platform deta
 | `ENV_PYTHON_OK` | ok | Python version meets or exceeds the recommended threshold. |
 | `ENV_VENV_OK` | ok | Running inside a virtual environment. |
 | `ENV_NO_VENV` | warning | No virtual environment detected. |
-| `ENV_PIP_MISSING` | error | pip could not be found or invoked. |
+| `ENV_PIP_MISSING` | warning | pip could not be found in the project environment and uv is not detected. |
+| `ENV_PIP_ABSENT_UV` | info | pip is absent but uv manages the environment, so pip is not required. |
 | `ENV_PIP_OUTDATED` | warning | pip major version is below 21. |
 | `ENV_PIP_OK` | ok | pip version meets requirements. |
 | `ENV_PLATFORM_INFO` | info | Informational platform details. |
@@ -38,17 +46,19 @@ Checks Python version, virtual-environment state, pip version, and platform deta
 
 Registry key: `dependencies`
 
-Detects version conflicts and missing packages by parsing the output of `pip check`.
+Detects version conflicts and missing packages.
 
 ### Detection logic
 
-Runs `pip check` as a subprocess and applies regex patterns to each output line:
+When pip is available in the project environment, the scanner runs `pip check` as a subprocess and applies regex patterns to each output line:
 
 - A "requires X, but Y is installed" line produces a version-conflict issue.
 - A "requires X, which is not installed" line produces a missing-dependency issue.
 - Unrecognised lines are reported as generic conflicts.
 
-When `pip check` reports no broken requirements, a single ok issue is returned.
+When pip is not available (for example in uv-managed environments) and distribution metadata is present, the scanner checks `Requires-Dist` metadata directly, evaluating environment markers against the project's own marker values. This provides equivalent conflict and missing-dependency detection without requiring pip.
+
+When `pip check` or the metadata inspection reports no broken requirements, a single ok issue is returned.
 
 ### Issue codes
 
@@ -67,13 +77,13 @@ Identifies installed packages that have newer versions available on PyPI.
 
 ### Detection logic
 
-Runs `pip list --outdated --format=json` as a subprocess. For each outdated package, the scanner compares the installed and latest version numbers using the `packaging` library:
+Runs `pip list --outdated --format=json` as a subprocess. When pip is not available in the project environment but uv is on PATH, the scanner uses `uv pip list --outdated` instead. For each outdated package, the scanner compares the installed and latest version numbers using the `packaging` library:
 
 - A major-version bump (for example 1.x to 2.x) is reported as a warning because it may include breaking changes.
 - A minor or patch bump is reported as info.
 - If either version string cannot be parsed, the issue defaults to warning.
 
-A `subprocess.TimeoutExpired` exception produces an informational timeout issue instead of failing the scan.
+A `subprocess.TimeoutExpired` exception produces an informational timeout issue instead of failing the scan. When neither pip nor uv can provide outdated-package data, an informational issue is reported instead of a false "all up to date" result.
 
 ### Issue codes
 
@@ -82,6 +92,7 @@ A `subprocess.TimeoutExpired` exception produces an informational timeout issue 
 | `PKG_OUTDATED` | warning or info | A package has a newer version available. Warning for major bumps, info for minor or patch bumps. |
 | `PKG_ALL_UP_TO_DATE` | ok | No outdated packages were detected. |
 | `PKG_OUTDATED_TIMEOUT` | info | The outdated-packages check timed out due to a slow network or index server. |
+| `PKG_OUTDATED_UNAVAILABLE` | info | The outdated-packages check could not run because neither pip nor uv was available, or the package index could not be queried. |
 
 ## Security
 
@@ -91,22 +102,26 @@ Queries the OSV (Open Source Vulnerabilities) batch API for known CVEs, GHSA adv
 
 ### Detection logic
 
-1. Collects every installed package and its version from the project context.
+1. Collects every installed package and its version from the project context. If the project environment could not be read, the scanner returns early and the analyzer reports `ENV_PACKAGES_UNAVAILABLE` instead.
 2. Builds query batches of up to 100 packages and sends them to the OSV `/v1/querybatch` endpoint.
 3. Makes up to 3 attempts per batch request with exponential backoff (1 s, 2 s between attempts).
-4. When the batch response is missing summary and details for a vulnerability, the scanner deep-fetches the full advisory from `/v1/vulns/{id}`.
-5. Collapses duplicate advisories. OSV often lists one advisory under several IDs, such as a GHSA entry and a PYSEC entry that name each other as aliases. Records for the same package and version whose IDs or aliases overlap are reported once, at the highest severity among them (since 2.0.1).
-6. If every attempt for a batch fails (network error, proxy block, or timeout), the scanner fails closed: it reports `SEC_SCAN_INCOMPLETE` and lists the packages it could not check, instead of reporting the project as clean (since 2.0.1).
-7. Results are cached per package and version (MD5 key) in the local cache file (`~/.pydoctor/cache.json`). Cached entries are reused on subsequent scans within the TTL window (default 3600 s, configurable with `PYDOCTOR_CACHE_TTL`).
+4. When the batch response is missing summary and details for a vulnerability, the scanner deep-fetches full advisories from `/v1/vulns/{id}` in parallel.
+5. Computes a CVSS v3 base score from the advisory's CVSS vector string when available. The score is included in the issue and in JSON output.
+6. Extracts a version-aware fix target. The scanner finds the specific affected range that contains the installed version and returns the fix for that range, so users see the closest applicable fix rather than one for a different release series.
+7. Filters out withdrawn advisories, which are no longer active.
+8. Collapses duplicate advisories. OSV often lists one advisory under several IDs, such as a GHSA entry and a PYSEC entry that name each other as aliases. Records for the same package and version whose IDs or aliases overlap are reported once, at the highest severity among them (since 2.0.1).
+9. If every attempt for a batch fails (network error, proxy block, or timeout), the scanner fails closed: it reports `SEC_SCAN_INCOMPLETE` and lists the packages it could not check, instead of reporting the project as clean (since 2.0.1).
+10. Results are cached per package and version in the local cache file (`~/.pydoctor/cache.json`). The cache key includes a schema version, so upgrading pydoctor-cli automatically invalidates stale entries. Cached entries are reused on subsequent scans within the TTL window (default 3600 s, configurable with `PYDOCTOR_CACHE_TTL`). Use `--no-cache` on `diagnose` to bypass cached results for one run.
 
 ### Severity mapping
 
-OSV / CVSS severity strings are mapped to pydoctor-cli severities:
+Severity is determined from the CVSS v3 base score when a valid vector is available. Otherwise, the advisory's database-specific severity label is used. OSV and CVSS severity strings are mapped to pydoctor-cli severities:
 
 | OSV severity | pydoctor-cli severity |
 |---|---|
 | CRITICAL | critical |
 | HIGH | critical |
+| MODERATE | error |
 | MEDIUM | error |
 | LOW | warning |
 | UNKNOWN | warning |
@@ -132,10 +147,11 @@ Detects declared dependencies that nothing in the project appears to use. Becaus
 1. Parses every `.py` file in the project using the AST to collect top-level import names.
 2. Maps import names to PyPI package names using the project environment's own package metadata (`importlib.metadata.packages_distributions()`), so a package whose import name differs from its PyPI name is matched correctly: `decouple` maps to `python-decouple`, `corsheaders` to `django-cors-headers`, `jwt` to `pyjwt`. A built-in mapping table and a fallback that lowercases and converts underscores to dashes are also applied (since 2.1.0).
 3. Counts module paths written as strings when they match an installed package. This covers frameworks that load dependencies by name, such as Django's `INSTALLED_APPS = ["corsheaders"]`, `MIDDLEWARE = ["whitenoise.middleware.WhiteNoiseMiddleware"]`, and `"BACKEND": "django_redis.cache.RedisCache"`. Strings that don't match an installed package are ignored (since 2.1.0).
-4. Counts declared dependencies named in run and deploy files in the project root: `Procfile`, `Dockerfile*`, compose files, `Makefile`, `*.sh`, `fly.toml`, `render.yaml`, `app.yaml`, and `.github/workflows/*.yml`. This covers servers such as `gunicorn` and `uvicorn` that are started as commands rather than imported (since 2.1.0).
-5. Compares the result against the project's declared dependencies (from `requirements.txt` or `pyproject.toml`).
-6. Walks the dependency graph (obtained via pipdeptree) to identify packages that are only used indirectly as transitive dependencies of another package.
-7. Packages in the hardcoded ignore list or the `ignored_packages` list from `[tool.pydoctor]` configuration are excluded from detection.
+4. Detects packages behind framework backends and URL schemes. Django database backend strings (for example `django.db.backends.postgresql`) are mapped to their driver packages (`psycopg2`), and URL schemes such as `postgres://` and `redis://` are mapped to the corresponding client libraries. Django hashers (Argon2, BCrypt) and cache backends (redis, memcache) are also recognised (since 2.2.0).
+5. Counts declared dependencies named in run and deploy files in the project root: `Procfile`, `Dockerfile*`, compose files, `Makefile`, `*.sh`, `fly.toml`, `render.yaml`, `app.yaml`, and `.github/workflows/*.yml`. This covers servers such as `gunicorn` and `uvicorn` that are started as commands rather than imported (since 2.1.0).
+6. Compares the result against the project's declared dependencies (from `requirements.txt` or `pyproject.toml`).
+7. Walks the dependency graph (obtained via pipdeptree) to identify packages that are only used indirectly as transitive dependencies of another package.
+8. Packages in the hardcoded ignore list or the `ignored_packages` list from `[tool.pydoctor]` configuration are excluded from detection.
 
 ### Hardcoded ignore list
 
@@ -163,33 +179,59 @@ Additional packages can be excluded by adding them to the `ignored_packages` lis
 
 Registry key: `ci`
 
-Scans for hardcoded secrets in source files and checks CI workflow configurations for insecure patterns.
+Scans committed files for hardcoded secrets, checks `.env` file hygiene, and examines CI workflow configurations for insecure patterns.
 
 ### Detection logic
 
-**Secret scanning** searches non-test `.py` files for regex matches against these patterns:
+**Secret scanning** examines all files tracked by git (or all non-test project files when git is unavailable) for provider-specific and generic credential patterns. Files over 1 MB and test files are skipped. Each finding includes the file path and line number. Add `# pydoctor: ignore` on a line to suppress a finding on that line.
 
-| Pattern name | What it matches |
+Provider-specific rules (high confidence):
+
+| Rule name | What it matches |
 |---|---|
-| `AWS_KEY` | Strings starting with `AWS` or `AKIA` followed by 16 uppercase alphanumeric characters. |
-| `GH_TOKEN` | Strings starting with `ghp_` followed by 36 alphanumeric characters. |
-| `PYPI_TOKEN` | Strings starting with `pypi-` followed by 50 or more alphanumeric, dash, or underscore characters. |
-| `GENERIC_SECRET` | Assignments like `secret = "..."`, `password = "..."`, `passwd = "..."`, `api_key: "..."`, or `apikey: "..."` where the value is 8 or more characters. |
+| `AWS_KEY` | AWS access key IDs starting with `AKIA`. |
+| `GH_TOKEN` | GitHub personal access tokens (`ghp_`) and fine-grained tokens (`github_pat_`). |
+| `PYPI_TOKEN` | PyPI API tokens starting with `pypi-`. |
+| `STRIPE_KEY` | Stripe secret and restricted keys (`sk_live_`, `rk_live_`). |
+| `ANTHROPIC_KEY` | Anthropic API keys starting with `sk-ant-`. |
+| `OPENAI_KEY` | OpenAI API keys starting with `sk-`. |
+| `SLACK_TOKEN` | Slack bot and user tokens (`xoxb-`, `xoxp-`). |
+| `GOOGLE_API_KEY` | Google API keys starting with `AIza`. |
+| `PRIVATE_KEY` | PEM-encoded private keys. |
+| `DATABASE_URL` | Database connection strings with embedded credentials. |
+| `APP_SECRET_KEY` | Framework secret key assignments with high-entropy values. |
 
-Test files are excluded from secret scanning.
+A generic rule (low confidence) also flags assignments to variables with secret-like names (such as `password`, `api_key`) when the assigned value has high entropy. Low-confidence findings are reported at error severity rather than critical.
 
-**Workflow scanning** examines files in `.github/workflows/` (`.yml` and `.yaml`) and `.gitlab-ci.yml`:
+When more than 50 secret findings are detected, only the first 50 are listed and a `SECRET_FINDINGS_TRUNCATED` issue is added.
+
+**Environment file checks** (when git is available):
+
+- `.env` files tracked by git are reported as errors because they typically contain real credentials visible in the repository history.
+- `.env` files not listed in `.gitignore` are reported as warnings because the next `git add .` would commit them.
+- Files named `.env.example` are not flagged.
+
+**Workflow scanning** examines files in `.github/workflows/` (`.yml` and `.yaml`) and `.gitlab-ci.yml` line by line, reporting file paths and line numbers. Add `# pydoctor: ignore` on a workflow line to suppress a finding.
 
 | Check | Condition | Severity |
 |---|---|---|
-| Unpinned actions | Workflow file contains `@main` or `@master` | warning |
-| Cleartext secrets | Workflow file contains an `env:` block with a key matching `SECRET_` | warning |
+| Unpinned actions | A `uses:` line references a branch such as `main`, `master`, `dev`, `develop`, `head`, or `trunk` instead of a tag or commit SHA. Local (`./`) and `docker://` actions are skipped. | warning |
+| Script injection | An untrusted GitHub context expression (such as `github.event.pull_request.title`) is interpolated inside a `run:` block, where crafted text can execute arbitrary commands. | error |
+| Broad permissions | `permissions: write-all` gives every step, including third-party actions, write access to the repository. | warning |
+| Pull request target checkout | A `pull_request_target` workflow checks out the PR's code, allowing anyone who opens a PR to run code with repository secrets. | critical |
+| Cleartext secrets | An environment variable with a secret-like name is set to a literal value that looks like a real credential (short placeholders and common throwaway values are ignored). | error |
 
 ### Issue codes
 
 | Code | Severity | Meaning |
 |---|---|---|
-| `SECRET_EXPOSED_{pattern}` | critical | A potential secret matching the named pattern was found in a source file. The `{pattern}` suffix is the pattern name (for example `SECRET_EXPOSED_AWS_KEY`). |
-| `CI_UNPINNED_ACTION` | warning | A workflow uses an unpinned action reference (`@main` or `@master`). |
-| `CI_CLEARTEXT_ENV` | warning | A workflow defines environment variables that may contain cleartext secrets. |
+| `SECRET_EXPOSED_{rule}` | critical or error | A potential secret matching the named rule was found in a committed file. High-confidence matches are critical; low-confidence (generic) matches are error. The `{rule}` suffix is the rule name (for example `SECRET_EXPOSED_AWS_KEY`). |
+| `CI_ENV_FILE_COMMITTED` | error | A `.env` file is tracked by git, exposing credentials in the repository history. |
+| `CI_ENV_FILE_NOT_IGNORED` | warning | A `.env` file is not listed in `.gitignore` and may be committed accidentally. |
+| `SECRET_FINDINGS_TRUNCATED` | error | More than 50 secret findings were detected. Fix the listed ones and scan again. |
+| `CI_UNPINNED_ACTION` | warning | A workflow uses an action pinned to a branch name instead of a tag or commit SHA. |
+| `CI_SCRIPT_INJECTION` | error | Untrusted input is interpolated into a workflow `run:` block. |
+| `CI_BROAD_PERMISSIONS` | warning | A workflow grants `write-all` token permissions. |
+| `CI_PULL_REQUEST_TARGET_CHECKOUT` | critical | A `pull_request_target` workflow checks out pull request code, creating a privilege escalation risk. |
+| `CI_CLEARTEXT_ENV` | error | A workflow sets a secret-like environment variable to a literal value visible in the repository. |
 | `CI_HEALTHY` | ok | No exposed secrets or insecure workflow patterns were detected. |

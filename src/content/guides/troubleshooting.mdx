@@ -11,7 +11,7 @@ Before you start, check your version:
 pydoctor --version
 ```
 
-Several fixes below need **2.0.1 or later**, and two need **2.1.0 or later**. Upgrade with `pip install --upgrade pydoctor-cli`.
+Several fixes below need **2.0.1 or later**, two need **2.1.0 or later**, and one needs **2.2.0 or later**. Upgrade with `pip install --upgrade pydoctor-cli`.
 
 <AccordionGroup>
   <Accordion id="wrong-pydoctor" title="The pydoctor command runs a different tool">
@@ -127,18 +127,37 @@ Several fixes below need **2.0.1 or later**, and two need **2.1.0 or later**. Up
     Don't remove packages based on this report alone. Findings are labelled "Possibly unused" for that reason.
   </Accordion>
 
+  <Accordion id="wrong-interpreter" title="Scan reports ENV_PACKAGES_UNAVAILABLE or checks the wrong Python">
+    **Symptom:** pydoctor reports `ENV_PACKAGES_UNAVAILABLE` (environment could not be read) or flags packages from a different interpreter than your project uses.
+
+    **Cause:** pydoctor-cli auto-detects the project's Python interpreter by searching for virtual environments, Poetry, PDM, and then `python3` on PATH. If the auto-detected interpreter is not the one your project uses, the scan sees wrong or missing packages.
+
+    **Fix:** point pydoctor at the correct interpreter with `--python` or the `PYDOCTOR_PYTHON` environment variable (since 2.2.0):
+
+    ```bash
+    pydoctor diagnose --python /path/to/venv/bin/python
+    # or
+    export PYDOCTOR_PYTHON=/path/to/venv/bin/python
+    pydoctor diagnose
+    ```
+
+    `--python` takes precedence over the environment variable and both take precedence over auto-detection.
+  </Accordion>
+
   <Accordion id="stale-results" title="A vulnerability you already fixed is still reported">
     **Symptom:** you upgraded a package, but the scan still reports an old advisory, or a newly published advisory doesn't appear yet.
 
     **Cause:** OSV results are cached in `~/.pydoctor/cache.json` for one hour by default.
 
-    **Fix:** clear the cache or bypass it for one run:
+    **Fix:** bypass the cache for one run, or clear it entirely:
 
     ```bash
-    pydoctor cache clear
-    # or
     pydoctor diagnose --no-cache
+    # or
+    pydoctor cache clear
     ```
+
+    `--no-cache` skips reading cached results and fetches fresh data from the OSV API. `cache clear` deletes the entire cache file.
 
     To change how long results are cached, set `PYDOCTOR_CACHE_TTL` (in seconds). See [Configuration](/configuration#cache).
   </Accordion>

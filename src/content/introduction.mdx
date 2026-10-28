@@ -15,7 +15,7 @@ pydoctor-cli runs six scanners, each focused on a different risk area:
     Queries the OSV vulnerability database for known issues in your installed packages.
   </Card>
   <Card title="Dependencies" icon="puzzle-piece" href="/scanners">
-    Runs `pip check` to find version conflicts and missing dependencies.
+    Finds version conflicts and missing dependencies using pip or direct metadata inspection.
   </Card>
   <Card title="Outdated packages" icon="arrow-up" href="/scanners">
     Lists installed packages with newer releases available, flagging major version gaps as warnings.
@@ -27,13 +27,13 @@ pydoctor-cli runs six scanners, each focused on a different risk area:
     Checks your Python version, virtual environment, and pip version against recommended baselines.
   </Card>
   <Card title="CI/CD checks" icon="lock" href="/scanners">
-    Scans Python files for leaked secrets and workflow files for unpinned actions or cleartext credentials.
+    Scans committed files for leaked secrets and workflow files for unpinned actions, script injection, and other risks.
   </Card>
 </CardGroup>
 
 ## Health score
 
-Every scan produces a health score on a 0 to 100 scale. The score starts at 100 and decreases based on the severity and category of each issue found. Four verdict bands summarize the result:
+Every scan produces a health score on a 0 to 100 scale. The score starts at 100 and decreases based on the severity and category of each issue found. Each category has a cap on how many points it can cost, and extra issues within a category have diminishing returns. Any critical-severity issue caps the score at 69, preventing a Good or Excellent verdict. Five verdict bands summarize the result:
 
 | Score | Verdict |
 |---|---|
@@ -41,6 +41,9 @@ Every scan produces a health score on a 0 to 100 scale. The score starts at 100 
 | 70 to 89 | Good |
 | 50 to 69 | Needs Attention |
 | 0 to 49 | Critical |
+| (any) | Incomplete |
+
+The Incomplete verdict appears when part of the scan could not run, for example when the project environment could not be read. The score covers only the checks that completed.
 
 You can set a minimum passing score in your `pyproject.toml` with the `min_health_score` option under `[tool.pydoctor]`. When the score falls below that threshold, the CLI exits with code 1, which makes it straightforward to use as a CI gate.
 

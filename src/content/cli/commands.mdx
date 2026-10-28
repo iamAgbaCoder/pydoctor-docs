@@ -26,11 +26,12 @@ pydoctor diagnose
 | Option | Short | Default | Description |
 |---|---|---|---|
 | `--path` | `-p` | `.` | Project directory to scan. |
+| `--python` | | auto-detect | Python interpreter of the project to scan. Also settable with `PYDOCTOR_PYTHON`. |
 | `--json` | `-j` | `false` | Output results as JSON. |
 | `--verbose` | `-v` | `false` | Show detailed output and timing. |
-| `--no-cache` | | `false` | Clear the local vulnerability cache before scanning. |
+| `--no-cache` | | `false` | Bypass the local vulnerability cache for this run. |
 
-When running without `--json`, pydoctor prompts for confirmation if no virtual environment is detected. The prompt is skipped in JSON mode.
+When running without `--json`, pydoctor prompts for confirmation if no virtual environment is detected. The prompt is skipped in JSON mode and in non-interactive environments (CI pipelines, piped input).
 
 **Scanner keys:** all registered scanners (environment, dependencies, outdated, security, unused, ci).
 
@@ -47,6 +48,7 @@ pydoctor check --ci
 | Option | Short | Default | Description |
 |---|---|---|---|
 | `--path` | `-p` | `.` | Project directory to scan. |
+| `--python` | | auto-detect | Python interpreter of the project to scan. Also settable with `PYDOCTOR_PYTHON`. |
 | `--ci` | | `false` | Restrict the scan to only the `ci` scanner. |
 | `--json` | `-j` | `false` | Output results as JSON. |
 | `--verbose` | `-v` | `false` | Show detailed output and timing. |
@@ -66,6 +68,7 @@ pydoctor fix
 | Option | Short | Default | Description |
 |---|---|---|---|
 | `--path` | `-p` | `.` | Project directory to scan. |
+| `--python` | | auto-detect | Python interpreter of the project to scan. Also settable with `PYDOCTOR_PYTHON`. |
 | `--safe` / `--no-safe` | | `--safe` | When safe, confirm each action interactively. |
 | `--upgrade` / `--no-upgrade` | | `--upgrade` | Upgrade outdated packages. |
 | `--remove` / `--no-remove` | | `--no-remove` | Remove unused packages. |
@@ -91,6 +94,7 @@ pydoctor scan-security
 | Option | Short | Default | Description |
 |---|---|---|---|
 | `--path` | `-p` | `.` | Project directory to scan. |
+| `--python` | | auto-detect | Python interpreter of the project to scan. Also settable with `PYDOCTOR_PYTHON`. |
 | `--json` | `-j` | `false` | Output results as JSON. |
 | `--verbose` | `-v` | `false` | Show detailed output and timing. |
 
@@ -100,7 +104,7 @@ pydoctor scan-security
 
 ### `docker`
 
-Check for a Dockerfile and whether it uses a Python base image. This command does not run any scanners. It is a beta feature limited to file-existence checks.
+Check for a Dockerfile and whether it uses a Python base image. This command does not run any scanners. It is a preview feature that only checks the Dockerfile; it does not inspect images or containers.
 
 ```bash
 pydoctor docker
@@ -118,7 +122,7 @@ A positional `image` argument is accepted but currently unused beyond display.
 
 ### `github`
 
-Run a scan with CI mode enabled. Checks git repository status when not in JSON mode.
+Run the CI/CD guard on a local git checkout. Checks git repository status when not in JSON mode.
 
 ```bash
 pydoctor github
@@ -127,10 +131,11 @@ pydoctor github
 | Option | Short | Default | Description |
 |---|---|---|---|
 | `--path` | `-p` | `.` | Project directory to scan. |
+| `--python` | | auto-detect | Python interpreter of the project to scan. Also settable with `PYDOCTOR_PYTHON`. |
 | `--json` | `-j` | `false` | Output results as JSON. |
 | `--verbose` | `-v` | `false` | Show detailed output and timing. |
 
-A positional `repo` argument optionally specifies a GitHub repository URL.
+A positional `repo` argument is accepted but remote repository scanning is not supported. If provided, pydoctor prints a warning and scans the local `--path` instead.
 
 **Scanner keys:** only the `ci` scanner (CI mode is always on, which restricts the scan to the `ci` scanner).
 
@@ -149,6 +154,7 @@ pydoctor scan-unused
 | Option | Short | Default | Description |
 |---|---|---|---|
 | `--path` | `-p` | `.` | Project directory to scan. |
+| `--python` | | auto-detect | Python interpreter of the project to scan. Also settable with `PYDOCTOR_PYTHON`. |
 | `--json` | `-j` | `false` | Output results as JSON. |
 | `--verbose` | `-v` | `false` | Show detailed output and timing. |
 
@@ -167,6 +173,7 @@ pydoctor scan-deps
 | Option | Short | Default | Description |
 |---|---|---|---|
 | `--path` | `-p` | `.` | Project directory to scan. |
+| `--python` | | auto-detect | Python interpreter of the project to scan. Also settable with `PYDOCTOR_PYTHON`. |
 | `--json` | `-j` | `false` | Output results as JSON. |
 | `--verbose` | `-v` | `false` | Show detailed output and timing. |
 
@@ -185,6 +192,7 @@ pydoctor check-env
 | Option | Short | Default | Description |
 |---|---|---|---|
 | `--path` | `-p` | `.` | Project directory to scan. |
+| `--python` | | auto-detect | Python interpreter of the project to scan. Also settable with `PYDOCTOR_PYTHON`. |
 | `--json` | `-j` | `false` | Output results as JSON. |
 | `--verbose` | `-v` | `false` | Show detailed output and timing. |
 
@@ -228,4 +236,4 @@ There is no `cache info` subcommand. Only `clear` and `purge` are implemented.
 
 ## Cache bypass behavior
 
-The `--no-cache` flag on the `diagnose` command calls `CacheManager().clear()` before scanning. This deletes the entire cache file rather than skipping the cache for the current run only. Subsequent scans will rebuild the cache from scratch.
+The `--no-cache` flag on the `diagnose` command skips reading cached results for the current run. Fresh data is fetched from the OSV API and written back to the cache, so subsequent runs without `--no-cache` use the updated entries. The flag does not delete the cache file; use `cache clear` for that.

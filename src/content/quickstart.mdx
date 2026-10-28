@@ -27,7 +27,7 @@ Run a full diagnostic scan on a Python project and understand the output.
     pydoctor --version
     ```
 
-    You should see `PyDoctor version 2.0.1` or later.
+    You should see `PyDoctor version 2.2.0` or later.
   </Step>
   <Step title="Run a diagnostic scan">
     Navigate to your project directory and run:
@@ -38,7 +38,7 @@ Run a full diagnostic scan on a Python project and understand the output.
 
     This runs every built-in scanner (environment, dependencies, outdated packages, security vulnerabilities, unused packages, and CI hygiene) and prints a report to your terminal.
 
-    If no virtual environment is detected, pydoctor prompts you to confirm before continuing with system-wide packages. You can activate a virtual environment and retry, or confirm to proceed.
+    If no virtual environment is detected, pydoctor prompts you to confirm before continuing with system-wide packages. You can activate a virtual environment and retry, or confirm to proceed. In non-interactive environments (CI, piped input), the prompt is skipped automatically.
   </Step>
   <Step title="Read the results">
     The report groups issues by category and assigns each one a severity:

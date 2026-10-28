@@ -14,13 +14,17 @@ pydoctor-cli returns exit code 1 when it finds any issue with ERROR or CRITICAL 
 
 ## Choose the right command for CI
 
-`check` runs all six registered scanners: environment, dependencies, outdated packages, security, unused packages, and CI. This is the broadest quality gate. It catches vulnerabilities, dependency conflicts, outdated packages, environment issues, unused dependencies, and CI hygiene problems (exposed secrets, unpinned actions, cleartext workflow variables) in a single pass.
+`check` runs all six registered scanners: environment, dependencies, outdated packages, security, unused packages, and CI. This is the broadest quality gate. It catches vulnerabilities, dependency conflicts, outdated packages, environment issues, unused dependencies, and CI hygiene problems (exposed secrets, unpinned actions, script injection, and other workflow risks) in a single pass.
 
 `check --ci` restricts the scan to only the CI scanner. It skips vulnerability, dependency, outdated-package, environment, and unused-package checks. Use it when you want a fast, focused gate that checks only for:
 
-- Hardcoded secrets (AWS keys, GitHub tokens, PyPI tokens, generic credential patterns) in non-test `.py` files
-- Unpinned GitHub Actions (`@main` or `@master` instead of a commit hash or version tag)
-- Cleartext `SECRET_` environment variables in `.github/workflows/` and `.gitlab-ci.yml` files
+- Hardcoded secrets (12+ provider-specific patterns plus a generic entropy-based rule) in all committed files
+- `.env` files tracked by git or missing from `.gitignore`
+- Unpinned GitHub Actions (references to branch names such as `main` or `master` instead of a tag or commit SHA)
+- Script injection (untrusted GitHub context expressions interpolated into `run:` blocks)
+- Overly broad workflow permissions (`write-all`)
+- Pull request target checkouts that create privilege escalation risks
+- Cleartext secret-like environment variables in workflow files
 
 Because `check` already includes the CI scanner, you do not need a separate `check --ci` step when you run the full scan.
 
@@ -60,7 +64,7 @@ The step fails the workflow when pydoctor-cli exits with code 1. JSON output let
 
 ## Use the `github` command
 
-The `github` command runs only the CI scanner (the same scope as `check --ci`) and adds git-repo detection. It checks whether the working directory is a git repository, then scans for secrets, unpinned actions, and cleartext environment variables. If you want the full scanner set instead, use `check`.
+The `github` command runs the CI/CD guard on a local git checkout (the same scope as `check --ci`). It checks whether the working directory is a git repository, then runs the full CI scanner. A positional `repo` argument is accepted but remote scanning is not supported; if provided, pydoctor prints a warning and scans the local path instead. If you want the full scanner set, use `check`.
 
 ```bash
 pydoctor github --json
@@ -79,7 +83,7 @@ min_health_score = 70
 
 With this setting, pydoctor-cli returns exit code 1 if the health score is below 70, even when no individual issue reaches ERROR or CRITICAL severity.
 
-Score penalties are weighted by category and severity. Security issues carry the highest penalties (up to 25 points for a critical vulnerability), followed by environment and CI issues. Outdated and unused packages carry smaller deductions. The score is clamped to 0 at the lower bound.
+Score penalties are weighted by category and severity. Each category has a cap on total deductions (security: 60, CI: 50, dependencies: 40, environment: 30, outdated: 15, unused: 10), and additional issues within a category have diminishing returns. Security vulnerabilities are grouped per package, so one upgrade fixes all advisories for that package and the penalty reflects only the worst advisory. Any critical-severity issue caps the score at 69. The score is clamped to 0 at the lower bound.
 
 ## Exit code summary
 
@@ -92,7 +96,7 @@ Otherwise the exit code is 0.
 
 ## Parse JSON output
 
-When you pass `--json`, pydoctor-cli writes a JSON object to stdout. For security-only scans (`scan-security`), the output uses a simplified shape with a `vulnerabilities` array. For all other commands, including `check --ci`, the output contains the full scan report with fields like `issues`, `scan_path`, `scanned_at`, and `scan_duration_ms`.
+When you pass `--json`, pydoctor-cli writes a JSON object to stdout. Every JSON report includes a `health` object with `score` and `verdict` fields. For security-only scans (`scan-security`), the output uses a simplified shape with a `vulnerabilities` array; each vulnerability includes `advisory` (the advisory ID such as GHSA or CVE), `aliases`, `fixed_in`, `cvss_score`, `severity`, `summary`, and `code` fields. For all other commands, including `check --ci`, the output contains the full scan report with fields like `issues`, `scan_path`, `scanned_at`, and `scan_duration_ms`.
 
 To save the report as a CI artifact:
 
@@ -113,7 +117,7 @@ If you only need a specific check in CI, use a targeted command instead of the f
 
 | Command | What it checks |
 |---|---|
-| `check --ci` | Exposed secrets, unpinned actions, cleartext workflow variables |
+| `check --ci` | Exposed secrets, `.env` file hygiene, unpinned actions, script injection, broad permissions, and other workflow risks |
 | `scan-security` | Known vulnerabilities via the OSV API |
 | `scan-deps` | Dependency version conflicts |
 | `scan-unused` | Unused packages (AST-based import analysis) |
