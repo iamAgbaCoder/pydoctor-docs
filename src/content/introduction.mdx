@@ -27,13 +27,13 @@ pydoctor-cli runs six scanners, each focused on a different risk area:
     Checks your Python version, virtual environment, and pip version against recommended baselines.
   </Card>
   <Card title="CI/CD checks" icon="lock" href="/scanners">
-    Scans Python files for leaked secrets and workflow files for unpinned actions or cleartext credentials.
+    Finds committed secrets and `.env` files, and risky GitHub Actions patterns such as `pull_request_target` pwn requests.
   </Card>
 </CardGroup>
 
 ## Health score
 
-Every scan produces a health score on a 0 to 100 scale. The score starts at 100 and decreases based on the severity and category of each issue found. Four verdict bands summarize the result:
+Every scan produces a health score on a 0 to 100 scale. The score starts at 100 and decreases based on the severity and category of each issue found. A vulnerable package counts once however many advisories it has, each category can cost only so much, and any critical issue keeps the score at 69 or below, so fixing problems visibly raises it. Four verdict bands summarize the result:
 
 | Score | Verdict |
 |---|---|

@@ -27,7 +27,9 @@ Run a full diagnostic scan on a Python project and understand the output.
     pydoctor --version
     ```
 
-    You should see `PyDoctor version 2.0.1` or later.
+    You should see `PyDoctor version 2.2.0` or later.
+
+    pipx works well here: pydoctor scans your project's own Python, not the one it's installed in.
   </Step>
   <Step title="Run a diagnostic scan">
     Navigate to your project directory and run:
@@ -38,7 +40,9 @@ Run a full diagnostic scan on a Python project and understand the output.
 
     This runs every built-in scanner (environment, dependencies, outdated packages, security vulnerabilities, unused packages, and CI hygiene) and prints a report to your terminal.
 
-    If no virtual environment is detected, pydoctor prompts you to confirm before continuing with system-wide packages. You can activate a virtual environment and retry, or confirm to proceed.
+    The **Environment** panel shows which interpreter was scanned and how pydoctor found it, for example `.venv/ in the project`. If that's not your project's environment, run the scan again with `--python path/to/python`.
+
+    If the interpreter isn't a virtual environment, pydoctor warns you and, in an interactive terminal, asks before continuing with system-wide packages.
   </Step>
   <Step title="Read the results">
     The report groups issues by category and assigns each one a severity:
@@ -51,7 +55,7 @@ Run a full diagnostic scan on a Python project and understand the output.
     | `error` | A concrete problem, such as a dependency conflict or a medium-severity vulnerability |
     | `critical` | Requires immediate attention, such as a high-severity vulnerability or an exposed secret |
 
-    At the bottom of the report, a health score from 0 to 100 summarizes the overall state of the project. The verdict label is Excellent (90+), Good (70+), Needs Attention (50+), or Critical (below 50).
+    At the bottom of the report, a health score from 0 to 100 summarizes the overall state of the project. The verdict label is Excellent (90+), Good (70+), Needs Attention (50+), or Critical (below 50). Any critical issue keeps the score at 69 or below, and if part of the scan couldn't run, the verdict says **Incomplete**.
   </Step>
   <Step title="Check the exit code">
     `pydoctor diagnose` exits with code 1 when:
@@ -71,7 +75,7 @@ Add `--json` to any scan command (`diagnose`, `check`, `scan-security`, `scan-un
 pydoctor diagnose --json
 ```
 
-In JSON mode the virtual-environment prompt is skipped and the scan runs non-interactively.
+In JSON mode the virtual-environment prompt is skipped and the scan runs non-interactively. The output includes every issue, a severity summary, and the health score under `health`.
 
 ## Next steps
 

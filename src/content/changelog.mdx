@@ -3,6 +3,22 @@ title: Changelog
 description: Release history for pydoctor-cli.
 ---
 
+## 2.2.0
+
+Every change in this release removes a case where pydoctor reported a problem as fine, or got a severity wrong.
+
+- **Scans the right environment.** Facts come from your project's interpreter, not pydoctor's. Under pipx or `uv tool`, and in uv environments (which have no pip), 2.1.0 saw 0 packages and reported everything as OK. Works without pip. New `--python` option and `PYDOCTOR_PYTHON`; the report shows which interpreter was scanned and why. See [Scanned environment](/scanners#scanned-environment).
+- **Fails loudly.** `ENV_PACKAGES_UNAVAILABLE` (error) when the environment can't be read, `ENV_DEPS_NOT_INSTALLED` (warning) when the scanned Python has none of your dependencies, and `PKG_OUTDATED_UNAVAILABLE` when the outdated check can't run, instead of "all up to date".
+- **Virtualenv detection works.** It always reported "active". The `diagnose` no-venv prompt now appears, and never blocks CI or piped runs.
+- **Real CVSS severity.** Calculated from the CVSS v3 vector. Previously a 3.1 (Low) and a 9.8 (Critical) vulnerability were both shown as critical. GitHub's `MODERATE` is now medium.
+- **Right fix version.** For advisories with one fix per release line, `fix` targets yours (Django 5.1.2 → 5.1.4, not 4.2.17).
+- **CI guard finds real leaks.** Scans every committed text file, with rules for Stripe, OpenAI, Anthropic, Slack, Google, private keys, database URLs and `SECRET_KEY` settings; flags committed `.env` files; checks workflows for `pull_request_target` pwn requests, script injection and `write-all`. Line numbers, redacted previews, and `# pydoctor: ignore`. See [CI/CD scanner](/scanners#ci-cd).
+- **A score that moves.** A package's advisories count once, categories have diminishing returns, and any critical issue keeps the score at 69 or below. Expect different, usually higher, scores.
+- **JSON.** Includes `health`; `scan-security --json` reports advisory IDs (it reported `SEC_VULNERABILITY` for every entry), aliases, fixed version and CVSS score.
+- **Smaller fixes.** Database drivers, password hashers and cache clients selected by Django settings count as used; advisories are fetched in parallel; `--no-cache` bypasses the cache instead of deleting it; `github <repo>` and `docker` describe what they actually do.
+
+Upgrade with `pip install --upgrade pydoctor-cli`.
+
 ## 2.1.0
 
 - **`fix` reports what really happened.** Upgrades are verified against the installed version. When a pin in `pyproject.toml` blocks an upgrade, `fix` shows a warning and the blocking constraint instead of reporting success. Previously, `uv add --upgrade pkg` could exit successfully without changing anything while `fix` printed "fixed".
